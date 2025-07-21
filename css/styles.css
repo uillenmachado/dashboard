@@ -1,0 +1,193 @@
+/* Custom styles for Dashboard Analítico */
+
+/* Theme transitions */
+* {
+    transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+    width: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: hsl(var(--b2));
+}
+
+::-webkit-scrollbar-thumb {
+    background: hsl(var(--bc) / 0.3);
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: hsl(var(--bc) / 0.5);
+}
+
+/* KPI Card animations */
+.kpi-card {
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.kpi-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+}
+
+/* Chart containers */
+.chart-container {
+    position: relative;
+    height: 100%;
+    width: 100%;
+}
+
+/* Loading states */
+.loading-shimmer {
+    background: linear-gradient(90deg, 
+        hsl(var(--b2)) 25%, 
+        hsl(var(--b3)) 50%, 
+        hsl(var(--b2)) 75%);
+    background-size: 200% 100%;
+    animation: shimmer 1.5s infinite;
+}
+
+@keyframes shimmer {
+    0% { background-position: -200% 0; }
+    100% { background-position: 200% 0; }
+}
+
+/* Theme icon visibility */
+[data-theme="light"] .theme-icon-dark {
+    display: none;
+}
+
+[data-theme="light"] .theme-icon-light {
+    display: inline-block;
+}
+
+[data-theme="dark"] .theme-icon-light {
+    display: none;
+}
+
+[data-theme="dark"] .theme-icon-dark {
+    display: inline-block;
+}
+
+/* Status badges */
+.status-badge {
+    font-size: 0.75rem;
+    font-weight: 600;
+    padding: 0.25rem 0.5rem;
+    border-radius: 0.375rem;
+    text-transform: uppercase;
+    letter-spacing: 0.025em;
+}
+
+.status-pago-prazo {
+    background-color: hsl(var(--su));
+    color: hsl(var(--suc));
+}
+
+.status-pago-atraso {
+    background-color: hsl(var(--wa));
+    color: hsl(var(--wac));
+}
+
+.status-pago-antecipado {
+    background-color: hsl(var(--in));
+    color: hsl(var(--inc));
+}
+
+.status-nao-pago {
+    background-color: hsl(var(--er));
+    color: hsl(var(--erc));
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .navbar-center {
+        display: none;
+    }
+    
+    .drawer-side {
+        z-index: 999;
+    }
+    
+    .kpi-card {
+        margin-bottom: 1rem;
+    }
+}
+
+/* Print styles */
+@media print {
+    .navbar,
+    .drawer-side,
+    .btn,
+    .loading {
+        display: none !important;
+    }
+    
+    .drawer-content {
+        margin-left: 0 !important;
+    }
+    
+    .kpi-card {
+        break-inside: avoid;
+        margin-bottom: 1rem;
+    }
+    
+    .chart-container {
+        height: 300px !important;
+    }
+}
+
+/* Accessibility improvements */
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
+}
+
+/* Focus styles for better accessibility */
+.btn:focus-visible,
+.input:focus-visible,
+.select:focus-visible {
+    outline: 2px solid hsl(var(--p));
+    outline-offset: 2px;
+}
+
+/* Custom flatpickr theme integration */
+.flatpickr-calendar {
+    background: hsl(var(--b1));
+    border: 1px solid hsl(var(--b3));
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+}
+
+.flatpickr-day {
+    color: hsl(var(--bc));
+}
+
+.flatpickr-day:hover {
+    background: hsl(var(--b2));
+}
+
+.flatpickr-day.selected {
+    background: hsl(var(--p));
+    color: hsl(var(--pc));
+}
+
+/* Error states */
+.error-state {
+    border-color: hsl(var(--er));
+    background-color: hsl(var(--er) / 0.1);
+}
+
+/* Success states */
+.success-state {
+    border-color: hsl(var(--su));
+    background-color: hsl(var(--su) / 0.1);
+}
+

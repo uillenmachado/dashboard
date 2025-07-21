@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="pt-BR" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard Analítico - Notas Fiscais</title>
+    
+    <!-- Tailwind CSS + daisyUI -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/daisyui@4.4.19/dist/full.min.css" rel="stylesheet" type="text/css" />
+    
+    <!-- Chart.js + Datalabels Plugin -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
+    
+    <!-- SheetJS -->
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
+    
+    <!-- Alpine.js -->
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.13.3/dist/cdn.min.js"></script>
+    
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+    
+    <!-- Flatpickr for date picker -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/pt.js"></script>
+    
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="css/styles.css">
+</head>
+<body class="bg-base-100 text-base-content">
+    <!-- Loading Overlay -->
+    <div id="loadingOverlay" class="fixed inset-0 bg-base-100 bg-opacity-90 flex items-center justify-center z-50 hidden">
+        <div class="text-center">
+            <span class="loading loading-spinner loading-lg text-primary"></span>
+            <p class="mt-4 text-lg">Processando dados...</p>
+        </div>
+    </div>
+
+    <!-- Navbar -->
+    <div class="navbar bg-base-200 shadow-lg sticky top-0 z-40">
+        <div class="navbar-start">
+            <label for="sidebar-drawer" class="btn btn-square btn-ghost drawer-button lg:hidden">
+                <i data-lucide="menu" class="w-6 h-6"></i>
+            </label>
+            <div class="flex items-center space-x-2">
+                <i data-lucide="bar-chart-3" class="w-8 h-8 text-primary"></i>
+                <span class="text-xl font-bold">Dashboard Analítico</span>
+            </div>
+        </div>
+        
+        <div class="navbar-center hidden lg:flex">
+            <span class="text-sm opacity-70">Análise de Notas Fiscais</span>
+        </div>
+        
+        <div class="navbar-end space-x-2">
+            <!-- Upload Button -->
+            <div class="tooltip tooltip-bottom" data-tip="Carregar planilha Excel">
+                <label for="fileInput" class="btn btn-primary btn-sm">
+                    <i data-lucide="upload" class="w-4 h-4"></i>
+                    <span class="hidden sm:inline">Upload</span>
+                </label>
+                <input type="file" id="fileInput" accept=".xlsx,.xls" class="hidden">
+            </div>
+            
+            <!-- Theme Toggle -->
+            <div class="tooltip tooltip-bottom" data-tip="Alternar tema">
+                <button id="themeToggle" class="btn btn-ghost btn-sm btn-square">
+                    <i data-lucide="sun" class="w-4 h-4 theme-icon-light"></i>
+                    <i data-lucide="moon" class="w-4 h-4 theme-icon-dark hidden"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Layout -->
+    <div class="drawer lg:drawer-open">
+        <input id="sidebar-drawer" type="checkbox" class="drawer-toggle" />
+        
+        <!-- Sidebar -->
+        <div class="drawer-side z-30">
+            <label for="sidebar-drawer" class="drawer-overlay"></label>
+            <aside class="w-80 min-h-full bg-base-200 p-4">
+                <div class="mb-6">
+                    <h2 class="text-lg font-semibold mb-4 flex items-center">
+                        <i data-lucide="filter" class="w-5 h-5 mr-2"></i>
+                        Filtros
+                    </h2>
+                    
+                    <!-- Date Range Filter -->
+                    <div class="form-control mb-4">
+                        <label class="label">
+                            <span class="label-text font-medium">Período</span>
+                        </label>
+                        <div class="grid grid-cols-2 gap-2">
+                            <input type="text" id="startDate" placeholder="Data inicial" 
+                                   class="input input-bordered input-sm">
+                            <input type="text" id="endDate" placeholder="Data final" 
+                                   class="input input-bordered input-sm">
+                        </div>
+                    </div>
+                    
+                    <!-- UF Filter -->
+                    <div class="form-control mb-4">
+                        <label class="label">
+                            <span class="label-text font-medium">Estado (UF)</span>
+                        </label>
+                        <select id="ufFilter" class="select select-bordered select-sm">
+                            <option value="">Todos os Estados</option>
+                        </select>
+                    </div>
+                    
+                    <!-- CNPJ Filter -->
+                    <div class="form-control mb-4">
+                        <label class="label">
+                            <span class="label-text font-medium">CNPJ</span>
+                        </label>
+                        <select id="cnpjFilter" class="select select-bordered select-sm">
+                            <option value="">Todos os CNPJs</option>
+                        </select>
+                    </div>
+                    
+                    <!-- Status Filter -->
+                    <div class="form-control mb-4">
+                        <label class="label">
+                            <span class="label-text font-medium">Status de Pagamento</span>
+                        </label>
+                        <div id="statusFilters" class="space-y-2">
+                            <!-- Status checkboxes will be populated by JavaScript -->
+                        </div>
+                    </div>
+                    
+                    <!-- Filter Actions -->
+                    <div class="flex space-x-2 mt-6">
+                        <button id="clearFilters" class="btn btn-outline btn-sm flex-1">
+                            <i data-lucide="x" class="w-4 h-4"></i>
+                            Limpar
+                        </button>
+                        <button id="applyFilters" class="btn btn-primary btn-sm flex-1">
+                            <i data-lucide="check" class="w-4 h-4"></i>
+                            Aplicar
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Data Summary -->
+                <div class="bg-base-100 rounded-lg p-4">
+                    <h3 class="font-semibold mb-2">Resumo dos Dados</h3>
+                    <div class="text-sm space-y-1">
+                        <div class="flex justify-between">
+                            <span>Total de registros:</span>
+                            <span id="totalRecords" class="font-medium">-</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span>Registros filtrados:</span>
+                            <span id="filteredRecords" class="font-medium">-</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span>Última atualização:</span>
+                            <span id="lastUpdate" class="font-medium text-xs">-</span>
+                        </div>
+                    </div>
+                </div>
+            </aside>
+        </div>
+        
+        <!-- Main Content -->
+        <div class="drawer-content">
+            <main class="p-4 lg:p-6">
+                <!-- Welcome Message -->
+                <div id="welcomeMessage" class="alert alert-info mb-6">
+                    <i data-lucide="info" class="w-5 h-5"></i>
+                    <div>
+                        <h3 class="font-bold">Bem-vindo ao Dashboard Analítico!</h3>
+                        <div class="text-sm">Faça upload de uma planilha Excel (.xlsx) para começar a análise dos dados.</div>
+                    </div>
+                </div>
+                
+                <!-- KPI Cards Grid -->
+                <div id="kpiGrid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8 hidden">
+                    <!-- KPI cards will be populated by JavaScript -->
+                </div>
+                
+                <!-- Charts Section -->
+                <div id="chartsSection" class="hidden">
+                    <h2 class="text-2xl font-bold mb-6 flex items-center">
+                        <i data-lucide="trending-up" class="w-6 h-6 mr-2"></i>
+                        Análises Gráficas
+                    </h2>
+                    
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        <!-- Status Conciliado Chart -->
+                        <div class="card bg-base-100 shadow-lg">
+                            <div class="card-body">
+                                <h3 class="card-title text-lg">Status de Conciliação</h3>
+                                <div class="h-72">
+                                    <canvas id="statusChart"></canvas>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Aging Chart -->
+                        <div class="card bg-base-100 shadow-lg">
+                            <div class="card-body">
+                                <h3 class="card-title text-lg">Aging de Recebíveis</h3>
+                                <div class="h-72">
+                                    <canvas id="agingChart"></canvas>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- DSO Chart -->
+                        <div class="card bg-base-100 shadow-lg">
+                            <div class="card-body">
+                                <h3 class="card-title text-lg">DSO Mensal</h3>
+                                <div class="h-72">
+                                    <canvas id="dsoChart"></canvas>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Revenue by UF Chart -->
+                        <div class="card bg-base-100 shadow-lg">
+                            <div class="card-body">
+                                <h3 class="card-title text-lg">Receita por Estado</h3>
+                                <div class="h-72">
+                                    <canvas id="revenueUfChart"></canvas>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Revenue vs Outstanding Chart -->
+                        <div class="card bg-base-100 shadow-lg lg:col-span-2">
+                            <div class="card-body">
+                                <h3 class="card-title text-lg">Receita vs Valor em Aberto</h3>
+                                <div class="h-72">
+                                    <canvas id="revenueOutstandingChart"></canvas>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <!-- JavaScript Modules -->
+    <script src="js/app.js"></script>
+    <script src="js/data-service.js"></script>
+    <script src="js/filters.js"></script>
+    <script src="js/charts.js"></script>
+    <script src="js/kpi-cards.js"></script>
+    
+    <script>
+        // Initialize Lucide icons
+        lucide.createIcons();
+    </script>
+<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'960b19c30fe5e01a',t:'MTc1Mjc2OTU4Mi4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+</html>
