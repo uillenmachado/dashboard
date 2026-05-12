@@ -43,6 +43,9 @@ app.use(helmet({
                 'https://cdnjs.cloudflare.com',
                 'https://unpkg.com'
             ],
+            // Permite handlers inline (onclick=) usados pelos botoes da tabela do dashboard.
+            // Sem isso, o helmet aplica scriptSrcAttr 'none' por padrao e bloqueia silenciosamente os cliques.
+            scriptSrcAttr: ["'unsafe-inline'"],
             styleSrc: [
                 "'self'",
                 "'unsafe-inline'",
