@@ -857,7 +857,7 @@ function atualizarPagamentosNoBanco(pagamentos) {
                     "SELECT id, numero, data_emissao, valor_nota, valor_liquido, recebido, previsao_recebimento FROM notas_fiscais WHERE numero = ?"
                 ).all(numNota);
                 if (notas.length > 0) {
-                    logger.info(`🔄 Doc ${numDoc} → nota ${numNota} (removido prefixo de ano ${anoPortal})`);
+                    logger.debug(`🔄 Doc ${numDoc} → nota ${numNota} (removido prefixo de ano ${anoPortal})`);
                 }
             }
         }
@@ -869,7 +869,7 @@ function atualizarPagamentosNoBanco(pagamentos) {
                 "SELECT id, numero, data_emissao, valor_nota, valor_liquido, recebido, previsao_recebimento FROM notas_fiscais WHERE numero = ?"
             ).all(semPrimeiro);
             if (notas.length > 0) {
-                logger.info(`🔄 Doc ${numDoc} → nota ${semPrimeiro} (removido dígito extra do início)`);
+                logger.debug(`🔄 Doc ${numDoc} → nota ${semPrimeiro} (removido dígito extra do início)`);
             }
         }
 
@@ -880,7 +880,7 @@ function atualizarPagamentosNoBanco(pagamentos) {
                 "SELECT id, numero, data_emissao, valor_nota, valor_liquido, recebido, previsao_recebimento FROM notas_fiscais WHERE numero = ?"
             ).all(semDois);
             if (notas.length > 0) {
-                logger.info(`🔄 Doc ${numDoc} → nota ${semDois} (removidos 2 dígitos extras do início)`);
+                logger.debug(`🔄 Doc ${numDoc} → nota ${semDois} (removidos 2 dígitos extras do início)`);
             }
         }
 
@@ -890,7 +890,7 @@ function atualizarPagamentosNoBanco(pagamentos) {
                 "SELECT id, numero, data_emissao, valor_nota, valor_liquido, recebido, previsao_recebimento FROM notas_fiscais WHERE numero LIKE ?"
             ).all(`%${numDoc}`);
             if (notas.length > 0) {
-                logger.info(`🔄 Doc ${numDoc} → nota ${notas[0].numero} (sufixo match)`);
+                logger.debug(`🔄 Doc ${numDoc} → nota ${notas[0].numero} (sufixo match)`);
             }
         }
 
@@ -914,7 +914,7 @@ function atualizarPagamentosNoBanco(pagamentos) {
                 detalhes.push({ numero: numDoc, status: 'valor_divergente', valor, valorDB: valorNota });
                 continue;
             }
-            logger.info(`✅ Doc ${numDoc} → nota ${nota.numero}: valor confirmado (R$${valor.toFixed(2)} ≈ R$${valorNota.toFixed(2)})`);
+            logger.debug(`✅ Doc ${numDoc} → nota ${nota.numero}: valor confirmado (R$${valor.toFixed(2)} ≈ R$${valorNota.toFixed(2)})`);
         }
         if (notas.length > 1) {
             nota = notas.reduce((best, n) => {
