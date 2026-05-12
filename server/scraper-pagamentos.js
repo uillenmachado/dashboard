@@ -14,6 +14,7 @@ const StealthPlugin = require('puppeteer-extra-plugin-stealth');
 const path = require('path');
 const fs = require('fs');
 const db = require('./db');
+const logger = require('./logger');
 
 // Ativar plugin stealth no Playwright — mascara navigator.webdriver e outros sinais
 chromium.use(StealthPlugin());
@@ -69,7 +70,7 @@ function importarPagamentosXLS(buffer) {
         if (colMap.documento === undefined) continue;
 
         const numCols = headerRow.length; // 12 ou 14
-        console.log(`📑 Sheet "${sheetName}": ${rawData.length - 1} linhas, ${numCols} colunas`);
+        logger.info(`📑 Sheet "${sheetName}": ${rawData.length - 1} linhas, ${numCols} colunas`);
 
         // Extrair linhas de dados (a partir da linha 1)
         for (let i = 1; i < rawData.length; i++) {
@@ -123,7 +124,7 @@ function importarPagamentosXLS(buffer) {
         return true;
     });
 
-    console.log(`📦 ${allPagamentos.length} pagamentos únicos extraídos do XLS`);
+    logger.info(`📦 ${allPagamentos.length} pagamentos únicos extraídos do XLS`);
 
     const syncId = db.registrarSincronizacao('importacao_pagamentos_xls');
     const resultado = atualizarPagamentosNoBanco(allPagamentos);
@@ -199,7 +200,7 @@ async function sincronizarPagamentos(email, senha) {
     let browser = null;
 
     try {
-        console.log('🏦 Abrindo Painel Fornecedor Finnet/Cimed (modo stealth)...');
+        logger.info('🏦 Abrindo Painel Fornecedor Finnet/Cimed (modo stealth)...');
 
         browser = await chromium.launch({
             headless: false,   // WAFs detectam headless — usar headed
@@ -260,7 +261,7 @@ async function sincronizarPagamentos(email, senha) {
         page.setDefaultTimeout(45000);
 
         // ── STEP 1: Acessar portal com delay humano ──
-        console.log('🔑 Acessando portal...');
+        logger.info('🔑 Acessando portal...');
         await page.goto(PORTAL_URL, { waitUntil: 'domcontentloaded', timeout: 60000 });
         await humanDelay(2000, 4000);  // Espera humana após carregar
 
@@ -277,7 +278,7 @@ async function sincronizarPagamentos(email, senha) {
         }
 
         // ── STEP 2: Login com digitação humana ──
-        console.log('🔑 Fazendo login...');
+        logger.info('🔑 Fazendo login...');
         await humanDelay(1000, 2000);
 
         // Localizar campos de login — o portal Finnet/Cimed usa campos simples (text + password)
@@ -317,10 +318,10 @@ async function sincronizarPagamentos(email, senha) {
 
         ensureDebugDir();
         await page.screenshot({ path: path.join(DEBUG_DIR, 'finnet-pos-login.png'), fullPage: true });
-        console.log(`📍 URL pós-login: ${page.url()}`);
+        logger.info(`📍 URL pós-login: ${page.url()}`);
 
         // ── STEP 3: Navegar para visão de pagamentos ──
-        console.log('📊 Navegando para visão de pagamentos...');
+        logger.info('📊 Navegando para visão de pagamentos...');
         await humanDelay(1000, 2000);
         await page.goto(PORTAL_VISAO, { waitUntil: 'networkidle', timeout: 30000 });
         await humanDelay(2000, 4000);
@@ -336,7 +337,7 @@ async function sincronizarPagamentos(email, senha) {
 
         // ── STEP 4: Ajustar filtros de data para capturar o máximo de dados ──
         // O portal filtra por padrão os últimos 3 meses. Vamos expandir para capturar tudo.
-        console.log('📅 Ajustando filtros de data para período máximo...');
+        logger.info('📅 Ajustando filtros de data para período máximo...');
 
         // Calcular datas: início = hoje - 365 dias, fim = hoje
         const hoje = new Date();
@@ -351,7 +352,7 @@ async function sincronizarPagamentos(email, senha) {
         if (toggleFiltros) {
             const isVisible = await toggleFiltros.isVisible();
             if (isVisible) {
-                console.log('📅 Expandindo seção de filtros...');
+                logger.debug('📅 Expandindo seção de filtros...');
                 await toggleFiltros.click();
                 await humanDelay(1000, 2000);
             }
@@ -380,7 +381,7 @@ async function sincronizarPagamentos(email, senha) {
             });
             return inputs;
         });
-        console.log(`📅 Total de inputs na página: ${allInputsDump.length}`);
+        logger.debug(`📅 Total de inputs na página: ${allInputsDump.length}`);
         // Logar inputs visíveis com data ou nomes sugestivos
         const inputsRelevantes = allInputsDump.filter(i => 
             i.visible && i.type === 'text' && (
@@ -389,14 +390,14 @@ async function sincronizarPagamentos(email, senha) {
                 /data|date|pag/i.test(i.id || '')
             )
         );
-        console.log(`📅 Inputs relevantes (visíveis, tipo text, com data/nome sugestivo): ${JSON.stringify(inputsRelevantes)}`);
+        logger.debug(`📅 Inputs relevantes (visíveis, tipo text, com data/nome sugestivo): ${JSON.stringify(inputsRelevantes)}`);
 
         // 4c) Encontrar os campos de data de pagamento entre os inputs VISÍVEIS
         // Estratégia: buscar inputs type="text" visíveis que contêm datas DD/MM/YYYY
         const dateVisibleInputs = allInputsDump.filter(i => 
             i.visible && i.type === 'text' && /^\d{2}\/\d{2}\/\d{4}$/.test(i.value)
         );
-        console.log(`📅 Inputs visíveis com datas: ${JSON.stringify(dateVisibleInputs)}`);
+        logger.debug(`📅 Inputs visíveis com datas: ${JSON.stringify(dateVisibleInputs)}`);
 
         let filtrosAplicados = false;
         let inputIniSelector = null;
@@ -432,10 +433,10 @@ async function sincronizarPagamentos(email, senha) {
             const second = dateVisibleInputs[1];
             inputIniSelector = first.id ? `#${first.id}` : `input[name="${first.name}"]`;
             inputFimSelector = second.id ? `#${second.id}` : `input[name="${second.name}"]`;
-            console.log('📅 Usando fallback posicional: primeiros 2 inputs de data visíveis');
+            logger.debug('📅 Usando fallback posicional: primeiros 2 inputs de data visíveis');
         }
 
-        console.log(`📅 Seletores finais: ini=${inputIniSelector}, fim=${inputFimSelector}`);
+        logger.debug(`📅 Seletores finais: ini=${inputIniSelector}, fim=${inputFimSelector}`);
 
         if (inputIniSelector && inputFimSelector) {
             const inputIni = await page.$(inputIniSelector);
@@ -445,7 +446,7 @@ async function sincronizarPagamentos(email, senha) {
                 // Verificar que são visíveis antes de clicar
                 const iniVisible = await inputIni.isVisible();
                 const fimVisible = await inputFim.isVisible();
-                console.log(`📅 Visibilidade: ini=${iniVisible}, fim=${fimVisible}`);
+                logger.debug(`📅 Visibilidade: ini=${iniVisible}, fim=${fimVisible}`);
 
                 if (iniVisible && fimVisible) {
                     // Forçar valor via DOM + evaluate (datepickers ignoram keyboard.type)
@@ -475,11 +476,11 @@ async function sincronizarPagamentos(email, senha) {
                     // Verificar se os valores foram realmente aplicados
                     const valIni = await inputIni.inputValue();
                     const valFim = await inputFim.inputValue();
-                    console.log(`📅 Valores após preenchimento: ini=${valIni}, fim=${valFim}`);
+                    logger.debug(`📅 Valores após preenchimento: ini=${valIni}, fim=${valFim}`);
 
                     if (valIni !== dataInicio || valFim !== dataFim) {
                         // Fallback: triple-click + type como último recurso
-                        console.log('📅 Valores não bateram, tentando via keyboard...');
+                        logger.debug('📅 Valores não bateram, tentando via keyboard...');
                         await inputIni.click({ clickCount: 3 });
                         await humanDelay(200, 400);
                         await page.keyboard.press('Backspace');
@@ -500,10 +501,10 @@ async function sincronizarPagamentos(email, senha) {
 
                         const valIni2 = await inputIni.inputValue();
                         const valFim2 = await inputFim.inputValue();
-                        console.log(`📅 Valores após fallback keyboard: ini=${valIni2}, fim=${valFim2}`);
+                        logger.debug(`📅 Valores após fallback keyboard: ini=${valIni2}, fim=${valFim2}`);
                     }
 
-                    console.log(`📅 Filtro preenchido: ${dataInicio} a ${dataFim}`);
+                    logger.info(`📅 Filtro preenchido: ${dataInicio} a ${dataFim}`);
                     filtrosAplicados = true;
                 }
             }
@@ -528,11 +529,11 @@ async function sincronizarPagamentos(email, senha) {
                     }
                     return null;
                 });
-                console.log(`🔍 Pesquisa executada com filtros expandidos (total registros: ${totalInfo || 'desconhecido'})`);
+                logger.info(`🔍 Pesquisa executada com filtros expandidos (total registros: ${totalInfo || 'desconhecido'})`);
             }
             await page.screenshot({ path: path.join(DEBUG_DIR, 'finnet-filtros-expandidos.png'), fullPage: true });
         } else {
-            console.log('⚠️ Campos de data não encontrados — usando filtro padrão do portal');
+            logger.info('⚠️ Campos de data não encontrados — usando filtro padrão do portal');
         }
 
         // ── STEP 5: Aumentar registros por página para pegar TODOS ──
@@ -572,7 +573,7 @@ async function sincronizarPagamentos(email, senha) {
             });
 
             if (paginacaoAlterada) {
-                console.log(`📄 Paginação alterada: ${paginacaoAlterada}`);
+                logger.info(`📄 Paginação alterada: ${paginacaoAlterada}`);
                 // Clicar em Pesquisar novamente para aplicar nova paginação
                 const btnPesquisar2 = await page.$('input[value="Pesquisar"], button:has-text("Pesquisar")');
                 if (btnPesquisar2) {
@@ -581,14 +582,14 @@ async function sincronizarPagamentos(email, senha) {
                     await humanDelay(2000, 4000);
                 }
             } else {
-                console.log('📄 Nenhum controle de paginação encontrado');
+                logger.info('📄 Nenhum controle de paginação encontrado');
             }
         } catch (e) {
-            console.log('⚠️ Não foi possível alterar registros por página:', e.message);
+            logger.info(`⚠️ Não foi possível alterar registros por página: ${e.message}`);
         }
 
         // ── STEP 6: Extrair dados da tabela (com suporte a múltiplas páginas) ──
-        console.log('📋 Extraindo dados de pagamentos...');
+        logger.info('📋 Extraindo dados de pagamentos...');
 
         let allDadosPagamento = [];
         let paginaAtual = 1;
@@ -688,9 +689,9 @@ async function sincronizarPagamentos(email, senha) {
 
         const dadosPagamento = pagamentos.data || [];
         if (paginaAtual === 1) {
-            console.log(`📊 ${pagamentos.tablesProcessed || 0} tabela(s) de pagamento encontrada(s)`);
+            logger.info(`📊 ${pagamentos.tablesProcessed || 0} tabela(s) de pagamento encontrada(s)`);
         }
-        console.log(`✅ Página ${paginaAtual}: ${dadosPagamento.length} pagamentos extraídos`);
+        logger.info(`✅ Página ${paginaAtual}: ${dadosPagamento.length} pagamentos extraídos`);
         allDadosPagamento = allDadosPagamento.concat(dadosPagamento);
 
         // Verificar se há próxima página
@@ -723,12 +724,12 @@ async function sincronizarPagamentos(email, senha) {
         });
 
         if (!temProximaPagina) {
-            console.log(`📄 Todas as páginas extraídas (${paginaAtual} página(s))`);
+            logger.info(`📄 Todas as páginas extraídas (${paginaAtual} página(s))`);
             break;
         }
 
         // Navegar para próxima página
-        console.log(`📄 Navegando para página ${paginaAtual + 1}...`);
+        logger.info(`📄 Navegando para página ${paginaAtual + 1}...`);
         const navegou = await page.evaluate(() => {
             const nextBtns = [...document.querySelectorAll('a.next, a[rel="next"], li.next a, .pagination .next a, .paginate_button.next:not(.disabled) a')];
             document.querySelectorAll('a').forEach(a => {
@@ -753,7 +754,7 @@ async function sincronizarPagamentos(email, senha) {
         });
 
         if (!navegou) {
-            console.log('📄 Não conseguiu navegar para próxima página');
+            logger.info('📄 Não conseguiu navegar para próxima página');
             break;
         }
 
@@ -762,7 +763,7 @@ async function sincronizarPagamentos(email, senha) {
         paginaAtual++;
         } // fim while paginação
 
-        console.log(`✅ Total: ${allDadosPagamento.length} pagamentos extraídos de ${paginaAtual} página(s)`);
+        logger.info(`✅ Total: ${allDadosPagamento.length} pagamentos extraídos de ${paginaAtual} página(s)`);
 
         const resultado = atualizarPagamentosNoBanco(allDadosPagamento);
 
@@ -783,7 +784,7 @@ async function sincronizarPagamentos(email, senha) {
         };
 
     } catch (error) {
-        console.error('❌ Erro no scraping Painel Fornecedor:', error.message);
+        logger.error({ err: error.message }, '❌ Erro no scraping Painel Fornecedor');
 
         db.finalizarSincronizacao(syncId, {
             encontrados: 0, novos: 0, erro: error.message
@@ -856,7 +857,7 @@ function atualizarPagamentosNoBanco(pagamentos) {
                     "SELECT id, numero, data_emissao, valor_nota, valor_liquido, recebido, previsao_recebimento FROM notas_fiscais WHERE numero = ?"
                 ).all(numNota);
                 if (notas.length > 0) {
-                    console.log(`🔄 Doc ${numDoc} → nota ${numNota} (removido prefixo de ano ${anoPortal})`);
+                    logger.info(`🔄 Doc ${numDoc} → nota ${numNota} (removido prefixo de ano ${anoPortal})`);
                 }
             }
         }
@@ -868,7 +869,7 @@ function atualizarPagamentosNoBanco(pagamentos) {
                 "SELECT id, numero, data_emissao, valor_nota, valor_liquido, recebido, previsao_recebimento FROM notas_fiscais WHERE numero = ?"
             ).all(semPrimeiro);
             if (notas.length > 0) {
-                console.log(`🔄 Doc ${numDoc} → nota ${semPrimeiro} (removido dígito extra do início)`);
+                logger.info(`🔄 Doc ${numDoc} → nota ${semPrimeiro} (removido dígito extra do início)`);
             }
         }
 
@@ -879,7 +880,7 @@ function atualizarPagamentosNoBanco(pagamentos) {
                 "SELECT id, numero, data_emissao, valor_nota, valor_liquido, recebido, previsao_recebimento FROM notas_fiscais WHERE numero = ?"
             ).all(semDois);
             if (notas.length > 0) {
-                console.log(`🔄 Doc ${numDoc} → nota ${semDois} (removidos 2 dígitos extras do início)`);
+                logger.info(`🔄 Doc ${numDoc} → nota ${semDois} (removidos 2 dígitos extras do início)`);
             }
         }
 
@@ -889,7 +890,7 @@ function atualizarPagamentosNoBanco(pagamentos) {
                 "SELECT id, numero, data_emissao, valor_nota, valor_liquido, recebido, previsao_recebimento FROM notas_fiscais WHERE numero LIKE ?"
             ).all(`%${numDoc}`);
             if (notas.length > 0) {
-                console.log(`🔄 Doc ${numDoc} → nota ${notas[0].numero} (sufixo match)`);
+                logger.info(`🔄 Doc ${numDoc} → nota ${notas[0].numero} (sufixo match)`);
             }
         }
 
@@ -908,12 +909,12 @@ function atualizarPagamentosNoBanco(pagamentos) {
             const valorNota = nota.valor_liquido || nota.valor_nota;
             const diffPercent = Math.abs(valorNota - valor) / Math.max(valorNota, valor, 1);
             if (diffPercent > 0.05) {
-                console.log(`⚠️ Doc ${numDoc} → nota ${nota.numero}: valor diverge (portal: R$${valor.toFixed(2)}, DB: R$${valorNota.toFixed(2)}, diff: ${(diffPercent*100).toFixed(1)}%) — ignorado`);
+                logger.info(`⚠️ Doc ${numDoc} → nota ${nota.numero}: valor diverge (portal: R$${valor.toFixed(2)}, DB: R$${valorNota.toFixed(2)}, diff: ${(diffPercent*100).toFixed(1)}%) — ignorado`);
                 naoEncontrados++;
                 detalhes.push({ numero: numDoc, status: 'valor_divergente', valor, valorDB: valorNota });
                 continue;
             }
-            console.log(`✅ Doc ${numDoc} → nota ${nota.numero}: valor confirmado (R$${valor.toFixed(2)} ≈ R$${valorNota.toFixed(2)})`);
+            logger.info(`✅ Doc ${numDoc} → nota ${nota.numero}: valor confirmado (R$${valor.toFixed(2)} ≈ R$${valorNota.toFixed(2)})`);
         }
         if (notas.length > 1) {
             nota = notas.reduce((best, n) => {
@@ -982,7 +983,7 @@ function atualizarPagamentosNoBanco(pagamentos) {
         }
     }
 
-    console.log(`📊 Resultado: ${atualizados} atualizados, ${jaRecebidos} já recebidos, ${naoEncontrados} não encontrados`);
+    logger.info(`📊 Resultado: ${atualizados} atualizados, ${jaRecebidos} já recebidos, ${naoEncontrados} não encontrados`);
     return { atualizados, jaRecebidos, naoEncontrados, detalhes };
 }
 

@@ -5,6 +5,7 @@
 
 const Database = require('better-sqlite3');
 const path = require('path');
+const logger = require('./logger');
 
 const DB_PATH = path.join(__dirname, '..', 'data', 'notas.db');
 
@@ -108,7 +109,7 @@ function initialize() {
         CREATE INDEX IF NOT EXISTS idx_notas_numero_cnpj ON notas_fiscais(numero, cnpj);
     `);
 
-    console.log('✅ Banco de dados inicializado:', DB_PATH);
+    logger.info(`✅ Banco de dados inicializado: ${DB_PATH}`);
     return db;
 }
 
@@ -593,7 +594,7 @@ async function backup() {
     const backupPath = path.join(backupDir, `notas_${timestamp}.db`);
 
     await db.backup(backupPath);
-    console.log(`💾 Backup salvo: ${backupPath}`);
+    logger.info(`💾 Backup salvo: ${backupPath}`);
 
     // Manter apenas os últimos 7 backups
     const backups = fs.readdirSync(backupDir)
@@ -602,7 +603,7 @@ async function backup() {
         .reverse();
     backups.slice(7).forEach(f => {
         fs.unlinkSync(path.join(backupDir, f));
-        console.log(`🗑️ Backup antigo removido: ${f}`);
+        logger.info(`🗑️ Backup antigo removido: ${f}`);
     });
 }
 

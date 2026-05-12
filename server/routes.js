@@ -38,7 +38,7 @@ router.get('/notas', (req, res) => {
             data: notasFormatadas
         });
     } catch (error) {
-        console.error('Erro ao listar notas:', error);
+        logger.error({ err: error.message }, 'Erro ao listar notas');
         res.status(500).json({ success: false, error: 'Erro ao listar notas' });
     }
 });
@@ -51,7 +51,7 @@ router.get('/notas/estatisticas', (req, res) => {
         const stats = db.obterEstatisticas();
         res.json({ success: true, data: stats });
     } catch (error) {
-        console.error('Erro ao obter estatísticas:', error);
+        logger.error({ err: error.message }, 'Erro ao obter estatísticas');
         res.status(500).json({ success: false, error: 'Erro ao obter estatísticas' });
     }
 });
@@ -73,7 +73,7 @@ router.get('/notas/:id', (req, res) => {
 
         res.json({ success: true, data: transformarParaFrontend(nota) });
     } catch (error) {
-        console.error('Erro ao buscar nota:', error);
+        logger.error({ err: error.message }, 'Erro ao buscar nota');
         res.status(500).json({ success: false, error: 'Erro ao buscar nota' });
     }
 });
@@ -119,7 +119,7 @@ router.post('/notas', (req, res) => {
             data: transformarParaFrontend(novaNota)
         });
     } catch (error) {
-        console.error('Erro ao criar nota:', error);
+        logger.error({ err: error.message }, 'Erro ao criar nota');
         res.status(500).json({ success: false, error: 'Erro ao criar nota' });
     }
 });
@@ -147,7 +147,7 @@ router.put('/notas/:id', (req, res) => {
             data: transformarParaFrontend(notaAtualizada)
         });
     } catch (error) {
-        console.error('Erro ao atualizar nota:', error);
+        logger.error({ err: error.message }, 'Erro ao atualizar nota');
         res.status(500).json({ success: false, error: 'Erro ao atualizar nota' });
     }
 });
@@ -220,7 +220,7 @@ router.put('/notas/:id/pagar', (req, res) => {
             data: transformarParaFrontend(notaAtualizada)
         });
     } catch (error) {
-        console.error('Erro ao marcar como paga:', error);
+        logger.error({ err: error.message }, 'Erro ao marcar como paga');
         res.status(500).json({ success: false, error: 'Erro ao marcar como paga' });
     }
 });
@@ -243,7 +243,7 @@ router.delete('/notas/:id', (req, res) => {
         db.deletarNota(id);
         res.json({ success: true, message: 'Nota removida com sucesso' });
     } catch (error) {
-        console.error('Erro ao deletar nota:', error);
+        logger.error({ err: error.message }, 'Erro ao deletar nota');
         res.status(500).json({ success: false, error: 'Erro ao deletar nota' });
     }
 });
@@ -258,7 +258,7 @@ router.get('/clientes', (req, res) => {
         const clientes = db.listarClientes();
         res.json({ success: true, data: clientes });
     } catch (error) {
-        console.error('Erro ao listar clientes:', error);
+        logger.error({ err: error.message }, 'Erro ao listar clientes');
         res.status(500).json({ success: false, error: 'Erro ao listar clientes' });
     }
 });
@@ -273,7 +273,7 @@ router.get('/clientes/mapeamento', (req, res) => {
         const mapeamentos = db.listarMapeamentoClientes();
         res.json({ success: true, data: mapeamentos });
     } catch (error) {
-        console.error('Erro ao listar mapeamentos:', error);
+        logger.error({ err: error.message }, 'Erro ao listar mapeamentos');
         res.status(500).json({ success: false, error: 'Erro ao listar mapeamentos' });
     }
 });
@@ -293,7 +293,7 @@ router.post('/clientes/mapeamento', (req, res) => {
         });
         res.json({ success: true });
     } catch (error) {
-        console.error('Erro ao salvar mapeamento:', error);
+        logger.error({ err: error.message }, 'Erro ao salvar mapeamento');
         res.status(500).json({ success: false, error: error.message });
     }
 });
@@ -306,7 +306,7 @@ router.delete('/clientes/mapeamento/:id', (req, res) => {
         db.deletarMapeamentoCliente(req.params.id);
         res.json({ success: true });
     } catch (error) {
-        console.error('Erro ao deletar mapeamento:', error);
+        logger.error({ err: error.message }, 'Erro ao deletar mapeamento');
         res.status(500).json({ success: false, error: error.message });
     }
 });
@@ -429,7 +429,7 @@ router.post('/importar', (req, res) => {
             }
         });
     } catch (error) {
-        console.error('Erro na importação:', error);
+        logger.error({ err: error.message }, 'Erro na importação');
         res.status(500).json({ success: false, error: 'Erro ao processar planilha: ' + error.message });
     }
 });
@@ -445,7 +445,7 @@ router.get('/sincronizacoes', (req, res) => {
         const syncs = db.listarSincronizacoes(limite);
         res.json({ success: true, data: syncs });
     } catch (error) {
-        console.error('Erro ao listar sincronizações:', error);
+        logger.error({ err: error.message }, 'Erro ao listar sincronizações');
         res.status(500).json({ success: false, error: 'Erro ao listar sincronizações' });
     }
 });
@@ -468,7 +468,7 @@ router.get('/analytics', (req, res) => {
         };
         res.json({ success: true, data: analytics });
     } catch (error) {
-        console.error('Erro ao obter analytics:', error);
+        logger.error({ err: error.message }, 'Erro ao obter analytics');
         res.status(500).json({ success: false, error: 'Erro ao obter analytics' });
     }
 });
@@ -643,7 +643,7 @@ router.get('/analytics/resumo', (req, res) => {
             }
         });
     } catch (error) {
-        console.error('Erro ao gerar analytics:', error);
+        logger.error({ err: error.message }, 'Erro ao gerar analytics');
         res.status(500).json({ success: false, error: 'Erro ao gerar analytics' });
     }
 });
@@ -675,7 +675,7 @@ router.post('/nfse/iniciar', async (req, res) => {
             syncId: resultado.syncId
         });
     } catch (error) {
-        console.error('Erro ao iniciar scraping:', error);
+        logger.error({ err: error.message }, 'Erro ao iniciar scraping');
         res.status(500).json({ success: false, erro: 'Erro ao acessar portal: ' + error.message });
     }
 });
@@ -712,7 +712,7 @@ router.post('/nfse/captcha', async (req, res) => {
             syncId: resultado.syncId
         });
     } catch (error) {
-        console.error('Erro ao resolver CAPTCHA:', error);
+        logger.error({ err: error.message }, 'Erro ao resolver CAPTCHA');
         res.status(500).json({ success: false, erro: error.message });
     }
 });
@@ -753,10 +753,10 @@ router.post('/nfse/sync-auto', async (req, res) => {
             });
         }
 
-        console.log('🤖 Iniciando sincronização automática (OCR)...');
+        logger.info('🤖 Iniciando sincronização automática (OCR)...');
 
         const resultado = await scraper.sincronizarAutomatico(login, senha, (etapa, msg) => {
-            console.log(`  [auto] ${etapa}: ${msg}`);
+            logger.info(`  [auto] ${etapa}: ${msg}`);
         });
 
         if (!resultado.success) {
@@ -779,7 +779,7 @@ router.post('/nfse/sync-auto', async (req, res) => {
             syncId: resultado.syncId
         });
     } catch (error) {
-        console.error('Erro na sincronização automática:', error);
+        logger.error({ err: error.message }, 'Erro na sincronização automática');
         res.status(500).json({ success: false, erro: error.message });
     }
 });
@@ -787,6 +787,7 @@ router.post('/nfse/sync-auto', async (req, res) => {
 // ==================== SYNC PAGAMENTOS (Painel Fornecedor Finnet/Cimed) ====================
 
 const scraperPagamentos = require('./scraper-pagamentos');
+const logger = require('./logger');
 
 /**
  * POST /api/pagamentos/sync - Sincroniza pagamentos do Painel Fornecedor Finnet
@@ -804,7 +805,7 @@ router.post('/pagamentos/sync', async (req, res) => {
             });
         }
 
-        console.log('🏦 Iniciando sincronização de pagamentos Finnet/Cimed...');
+        logger.info('🏦 Iniciando sincronização de pagamentos Finnet/Cimed...');
         const resultado = await scraperPagamentos.sincronizarPagamentos(email, senha);
 
         res.json({
@@ -812,7 +813,7 @@ router.post('/pagamentos/sync', async (req, res) => {
             data: resultado
         });
     } catch (error) {
-        console.error('Erro na sincronização de pagamentos:', error);
+        logger.error({ err: error.message }, 'Erro na sincronização de pagamentos');
         res.status(500).json({ success: false, error: error.message });
     }
 });
@@ -827,12 +828,12 @@ router.post('/pagamentos/importar-xls', (req, res) => {
             return res.status(400).json({ success: false, error: 'Nenhum arquivo enviado' });
         }
 
-        console.log(`📥 Importando pagamentos XLS: ${req.file.originalname} (${(req.file.size / 1024).toFixed(1)} KB)`);
+        logger.info(`📥 Importando pagamentos XLS: ${req.file.originalname} (${(req.file.size / 1024).toFixed(1)} KB)`);
         const resultado = scraperPagamentos.importarPagamentosXLS(req.file.buffer);
 
         res.json({ success: true, data: resultado });
     } catch (error) {
-        console.error('Erro na importação de pagamentos XLS:', error);
+        logger.error({ err: error.message }, 'Erro na importação de pagamentos XLS');
         res.status(500).json({ success: false, error: error.message });
     }
 });

@@ -7,6 +7,7 @@
 
 const { createWorker } = require('tesseract.js');
 const sharp = require('sharp');
+const logger = require('./logger');
 
 let worker = null;
 
@@ -15,13 +16,13 @@ let worker = null;
  */
 async function getWorker() {
     if (!worker) {
-        console.log('🔤 Inicializando Tesseract OCR...');
+        logger.info('🔤 Inicializando Tesseract OCR...');
         worker = await createWorker('eng', 1, {});
         await worker.setParameters({
             tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789',
             tessedit_pageseg_mode: '8', // Single word
         });
-        console.log('✅ Tesseract OCR pronto');
+        logger.info('✅ Tesseract OCR pronto');
     }
     return worker;
 }
@@ -163,13 +164,13 @@ async function resolverCaptcha(imageBuffer) {
             const textoLimpo = limparTextoOCR(data.text);
             const confianca = data.confidence;
 
-            console.log(`  [OCR] ${variante.nome}: "${textoLimpo}" (confiança: ${Math.round(confianca)}%)`);
+            logger.info(`  [OCR] ${variante.nome}: "${textoLimpo}" (confiança: ${Math.round(confianca)}%)`);
 
             if (textoLimpo.length >= 3 && textoLimpo.length <= 8 && confianca > melhorResultado.confianca) {
                 melhorResultado = { texto: textoLimpo, confianca };
             }
         } catch (e) {
-            console.warn(`  [OCR] ${variante.nome}: erro -`, e.message);
+            logger.warn(`  [OCR] ${variante.nome}: erro - ${e.message}`);
         }
     }
 
@@ -187,7 +188,7 @@ async function resolverCaptcha(imageBuffer) {
         }
     }
 
-    console.log(`🔤 OCR melhor resultado: "${melhorResultado.texto}" (confiança: ${Math.round(melhorResultado.confianca)}%)`);
+    logger.info(`🔤 OCR melhor resultado: "${melhorResultado.texto}" (confiança: ${Math.round(melhorResultado.confianca)}%)`);
     return melhorResultado;
 }
 
@@ -198,7 +199,7 @@ async function encerrar() {
     if (worker) {
         await worker.terminate();
         worker = null;
-        console.log('🔤 Tesseract OCR encerrado');
+        logger.info('🔤 Tesseract OCR encerrado');
     }
 }
 

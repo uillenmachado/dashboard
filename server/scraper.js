@@ -15,6 +15,7 @@ const fs = require('fs');
 const db = require('./db');
 const ocr = require('./ocr');
 const pdfParse = require('pdf-parse');
+const logger = require('./logger');
 const { extrairDadosDoPdfText, parsearValorBR, parsearDataBR } = require('./utils');
 
 const PORTAL_URL = 'https://lftributos.metropolisweb.com.br/metropolisWEB/?origem=1';
@@ -49,7 +50,7 @@ async function iniciarSessao(login, senha) {
     const syncId = db.registrarSincronizacao('scraping_nfse');
 
     try {
-        console.log('🌐 Abrindo navegador para portal MetropolisWEB...');
+        logger.info('🌐 Abrindo navegador para portal MetropolisWEB...');
 
         const browser = await chromium.launch({
             headless: true,
@@ -65,21 +66,21 @@ async function iniciarSessao(login, senha) {
         const page = await context.newPage();
         page.setDefaultTimeout(45000); // Timeout global de 45s para evitar travamento
 
-        console.log('📄 Navegando para o portal...');
+        logger.info('📄 Navegando para o portal...');
         await page.goto(PORTAL_URL, { waitUntil: 'networkidle', timeout: 30000 });
         await page.waitForTimeout(1500);
 
         // Capturar imagem do CAPTCHA
-        console.log('🖼️ Capturando CAPTCHA...');
+        logger.info('🖼️ Capturando CAPTCHA...');
         const captchaElement = await page.$(SEL.captchaImg);
 
         let captchaBase64 = null;
         if (captchaElement) {
             const captchaBuffer = await captchaElement.screenshot();
             captchaBase64 = captchaBuffer.toString('base64');
-            console.log('✅ CAPTCHA capturado (Kaptcha.jpg)');
+            logger.info('✅ CAPTCHA capturado (Kaptcha.jpg)');
         } else {
-            console.log('⚠️ CAPTCHA não encontrado, capturando tela...');
+            logger.info('⚠️ CAPTCHA não encontrado, capturando tela...');
             ensureDebugDir();
             await page.screenshot({ path: path.join(DEBUG_DIR, 'login-page.png'), fullPage: true });
             const fullBuffer = await page.screenshot({ fullPage: false });
@@ -93,7 +94,7 @@ async function iniciarSessao(login, senha) {
             iniciadoEm: new Date()
         };
 
-        console.log('⏳ Aguardando resolução do CAPTCHA pelo usuário...');
+        logger.info('⏳ Aguardando resolução do CAPTCHA pelo usuário...');
 
         return {
             success: true,
@@ -103,7 +104,7 @@ async function iniciarSessao(login, senha) {
         };
 
     } catch (error) {
-        console.error('❌ Erro ao iniciar sessão:', error.message);
+        logger.error({ err: error.message }, '❌ Erro ao iniciar sessão');
         db.finalizarSincronizacao(syncId, { erro: error.message });
         await encerrarSessao();
         throw error;
@@ -122,7 +123,7 @@ async function resolverCaptchaELogar(textoCaptcha) {
     sessaoAtiva.status = 'logando';
 
     try {
-        console.log('🔑 Preenchendo formulário de login...');
+        logger.info('🔑 Preenchendo formulário de login...');
 
         await page.fill(SEL.loginInput, login);
         await page.waitForTimeout(300);
@@ -131,7 +132,7 @@ async function resolverCaptchaELogar(textoCaptcha) {
         await page.fill(SEL.captchaInput, textoCaptcha);
         await page.waitForTimeout(300);
 
-        console.log('🚀 Clicando em Entrar...');
+        logger.info('🚀 Clicando em Entrar...');
         await page.click(SEL.btnEntrar);
 
         // Aguardar navegação pós-login
@@ -142,7 +143,7 @@ async function resolverCaptchaELogar(textoCaptcha) {
 
         const urlAtual = page.url();
         const conteudo = await page.content();
-        console.log('📍 URL pós-login:', urlAtual);
+        logger.info(`📍 URL pós-login: ${urlAtual}`);
 
         // Se ainda está na página de login com o form visível = falhou
         const aindaNaLogin = conteudo.includes('FormLogin') && conteudo.includes('kaptchafield');
@@ -161,7 +162,7 @@ async function resolverCaptchaELogar(textoCaptcha) {
                 return null;
             });
 
-            console.log('⚠️ Ainda na página de login. Erro:', msgErro || 'CAPTCHA provavelmente incorreto');
+            logger.info(`⚠️ Ainda na página de login. Erro: ${msgErro || 'CAPTCHA provavelmente incorreto'}`);
             sessaoAtiva.status = 'aguardando_captcha';
 
             const novoCaptcha = await capturarNovoCaptcha();
@@ -175,7 +176,7 @@ async function resolverCaptchaELogar(textoCaptcha) {
         }
 
         // Login bem-sucedido!
-        console.log('✅ Login bem-sucedido!');
+        logger.info('✅ Login bem-sucedido!');
         sessaoAtiva.status = 'logado';
 
         const notas = await extrairNotas(page);
@@ -198,7 +199,7 @@ async function resolverCaptchaELogar(textoCaptcha) {
         };
 
     } catch (error) {
-        console.error('❌ Erro no login/extração:', error.message);
+        logger.error({ err: error.message }, '❌ Erro no login/extração');
         ensureDebugDir();
         try { await page.screenshot({ path: path.join(DEBUG_DIR, 'erro.png'), fullPage: true }); } catch(e) {}
         
@@ -228,12 +229,12 @@ async function capturarNovoCaptcha() {
 
     try {
         const page = sessaoAtiva.page;
-        console.log('🔄 Capturando novo CAPTCHA para retry...');
+        logger.info('🔄 Capturando novo CAPTCHA para retry...');
 
         // Tentar clicar no refresh primeiro
         const refreshBtn = await page.$(SEL.captchaRefresh);
         if (refreshBtn) {
-            console.log('🔄 Clicando em refresh do CAPTCHA...');
+            logger.info('🔄 Clicando em refresh do CAPTCHA...');
             await refreshBtn.click();
             await page.waitForTimeout(1500);
         }
@@ -250,26 +251,26 @@ async function capturarNovoCaptcha() {
         const captchaEl = await page.$(SEL.captchaImg);
         if (captchaEl) {
             const buf = await captchaEl.screenshot();
-            console.log('✅ Novo CAPTCHA capturado');
+            logger.info('✅ Novo CAPTCHA capturado');
             return buf.toString('base64');
         }
 
         // Fallback: reload total da página
-        console.log('🔄 Reload da página para novo CAPTCHA...');
+        logger.info('🔄 Reload da página para novo CAPTCHA...');
         await page.reload({ waitUntil: 'networkidle' });
         await page.waitForTimeout(2000);
 
         const captchaEl2 = await page.$(SEL.captchaImg);
         if (captchaEl2) {
             const buf = await captchaEl2.screenshot();
-            console.log('✅ Novo CAPTCHA capturado após reload');
+            logger.info('✅ Novo CAPTCHA capturado após reload');
             return buf.toString('base64');
         }
 
-        console.log('❌ Não foi possível capturar novo CAPTCHA');
+        logger.info('❌ Não foi possível capturar novo CAPTCHA');
         return null;
     } catch (error) {
-        console.error('Erro ao capturar novo CAPTCHA:', error.message);
+        logger.error({ err: error.message }, 'Erro ao capturar novo CAPTCHA');
         return null;
     }
 }
@@ -286,14 +287,14 @@ async function capturarNovoCaptcha() {
  *   Responsável Recolhimento, Status, N° RPS
  */
 async function extrairNotas(page) {
-    console.log('📊 Extraindo notas fiscais do portal...');
+    logger.info('📊 Extraindo notas fiscais do portal...');
     const notas = [];
 
     try {
         ensureDebugDir();
 
         // === Passo 1: Expandir accordion NFS-e ===
-        console.log('📂 Expandindo menu NFS-e...');
+        logger.info('📂 Expandindo menu NFS-e...');
         const tdNfse = await page.$('td[onclick*="mostrarFecharSetorNF"]');
         if (tdNfse) {
             await tdNfse.click();
@@ -312,10 +313,10 @@ async function extrairNotas(page) {
         }
 
         // === Passo 2: Clicar em "Nota Fiscal Eletrônica" ===
-        console.log('📌 Navegando para "Nota Fiscal Eletrônica"...');
+        logger.info('📌 Navegando para "Nota Fiscal Eletrônica"...');
         const linkNFE = await page.$('a:has-text("Nota Fiscal Eletrônica")');
         if (!linkNFE) {
-            console.error('❌ Link "Nota Fiscal Eletrônica" não encontrado');
+            logger.error('❌ Link "Nota Fiscal Eletrônica" não encontrado');
             const htmlContent = await page.content();
             fs.writeFileSync(path.join(DEBUG_DIR, 'pagina-notas.html'), htmlContent);
             return notas;
@@ -329,11 +330,11 @@ async function extrairNotas(page) {
 
         // Verificar se chegou na página correta
         const url = page.url();
-        console.log(`📍 URL: ${url}`);
+        logger.info(`📍 URL: ${url}`);
 
         // Se a URL contém notaFiscalEletronica ou executarFiltrar, estamos na página certa
         if (!url.includes('notaFiscalEletronica') && !url.includes('executarFiltrar')) {
-            console.log('⚠️ Não chegou à página de notas. Tentando URL direta...');
+            logger.info('⚠️ Não chegou à página de notas. Tentando URL direta...');
             await page.goto('https://lftributos.metropolisweb.com.br/metropolisWEB/nfe/notaFiscalEletronica.do?metodo=executarFiltrar&codMenu=7', {
                 waitUntil: 'load', timeout: 15000
             }).catch(() => {});
@@ -349,18 +350,18 @@ async function extrairNotas(page) {
             if (btnPesquisar) {
                 const isVisible = await btnPesquisar.isVisible().catch(() => false);
                 if (isVisible) {
-                    console.log('🔍 Clicando em Pesquisar...');
+                    logger.info('🔍 Clicando em Pesquisar...');
                     await btnPesquisar.click();
                     await page.waitForLoadState('load', { timeout: 15000 }).catch(() => {});
                     await page.waitForTimeout(3000);
                 } else {
-                    console.log('ℹ️ Pesquisar não visível — dados já carregados pela URL');
+                    logger.info('ℹ️ Pesquisar não visível — dados já carregados pela URL');
                 }
             } else {
-                console.log('ℹ️ Sem botão Pesquisar — dados já carregados pela URL');
+                logger.info('ℹ️ Sem botão Pesquisar — dados já carregados pela URL');
             }
         } catch (e) {
-            console.log('ℹ️ Pesquisar ignorado:', e.message);
+            logger.info(`ℹ️ Pesquisar ignorado: ${e.message}`);
         }
 
         // === Passo 4: Verificar total de registros ===
@@ -371,9 +372,9 @@ async function extrairNotas(page) {
             return match ? parseInt(match[1]) : null;
         });
         if (totalRegistros) {
-            console.log(`📊 Total de registros no portal: ${totalRegistros}`);
+            logger.info(`📊 Total de registros no portal: ${totalRegistros}`);
         } else {
-            console.log('ℹ️ Texto de total de registros não encontrado');
+            logger.info('ℹ️ Texto de total de registros não encontrado');
         }
 
         // === Passo 5: Extrair notas página por página ===
@@ -383,20 +384,20 @@ async function extrairNotas(page) {
         const maxPaginas = totalRegistros ? Math.ceil(totalRegistros / 10) + 2 : 100;
 
         // Extrair primeira página
-        console.log(`📄 Extraindo página 1...`);
+        logger.info(`📄 Extraindo página 1...`);
         const notasPag1 = await extrairNotasDaTabela(page);
-        console.log(`   → ${notasPag1.length} notas na página 1`);
+        logger.info(`   → ${notasPag1.length} notas na página 1`);
         notas.push(...notasPag1);
         await page.screenshot({ path: path.join(DEBUG_DIR, 'resultado-pesquisa.png'), fullPage: true });
 
         // Determinar registros por página
         const regsPorPagina = notasPag1.length || 10;
         const totalPaginas = totalRegistros ? Math.ceil(totalRegistros / regsPorPagina) : maxPaginas;
-        console.log(`📊 Estimativa: ${totalPaginas} páginas (${regsPorPagina} por página)`);
+        logger.info(`📊 Estimativa: ${totalPaginas} páginas (${regsPorPagina} por página)`);
 
         // Extrair páginas restantes usando submetePaginacao diretamente
         for (let nextPage = 2; nextPage <= totalPaginas; nextPage++) {
-            console.log(`📄 Navegando para página ${nextPage}/${totalPaginas}...`);
+            logger.info(`📄 Navegando para página ${nextPage}/${totalPaginas}...`);
 
             try {
                 // Chamar diretamente a função de paginação do portal
@@ -424,28 +425,28 @@ async function extrairNotas(page) {
                 await page.waitForTimeout(1500);
 
                 const notasPagina = await extrairNotasDaTabela(page);
-                console.log(`   → ${notasPagina.length} notas na página ${nextPage}`);
+                logger.info(`   → ${notasPagina.length} notas na página ${nextPage}`);
                 notas.push(...notasPagina);
 
                 // Se página veio vazia, pode ter acabado
                 if (notasPagina.length === 0) {
-                    console.log('ℹ️ Página vazia — fim da paginação');
+                    logger.info('ℹ️ Página vazia — fim da paginação');
                     break;
                 }
             } catch (e) {
-                console.error(`⚠️ Erro na página ${nextPage}: ${e.message}`);
+                logger.error(`⚠️ Erro na página ${nextPage}: ${e.message}`);
                 // Tentar continuar com a próxima página
                 continue;
             }
         }
 
-        console.log(`✅ ${notas.length} notas extraídas do portal (${Math.min(paginaAtual, totalPaginas)} páginas)`);
+        logger.info(`✅ ${notas.length} notas extraídas do portal (${Math.min(paginaAtual, totalPaginas)} páginas)`);
 
         // === Passo 6: Enriquecer dados dos clientes visitando páginas de detalhe ===
         try {
             await enriquecerDadosClientes(page, notas);
         } catch(e) {
-            console.warn('⚠️ Erro no enriquecimento de clientes (continua sem CNPJ):', e.message);
+            logger.warn(`⚠️ Erro no enriquecimento de clientes (continua sem CNPJ): ${e.message}`);
             // Limpar campos temporários que podem ter ficado
             for (const n of notas) {
                 delete n._pdfLink; delete n._link; delete n._onclick; delete n._tomadorOriginal;
@@ -457,7 +458,7 @@ async function extrairNotas(page) {
         return notas;
 
     } catch (error) {
-        console.error('❌ Erro ao extrair notas:', error.message);
+        logger.error({ err: error.message }, '❌ Erro ao extrair notas');
         ensureDebugDir();
         try { await page.screenshot({ path: path.join(DEBUG_DIR, 'erro-extracao.png'), fullPage: true }); } catch(e) {}
         return notas;
@@ -655,7 +656,7 @@ async function extrairNotasDaTabela(page) {
     // Log de debug
     const { notas: rows, debug } = resultado;
     if (!debug.tabelaUsada) {
-        console.log('   ⚠️ Nenhuma tabela de notas identificada!');
+        logger.info('   ⚠️ Nenhuma tabela de notas identificada!');
     }
 
     // Converter para formato padronizado
@@ -732,7 +733,7 @@ async function enriquecerDadosClientes(page, notas) {
     });
 
     if (notasParaEnriquecer.length === 0) {
-        console.log('ℹ️ Todas as notas já possuem CNPJ ou não têm link de detalhe');
+        logger.info('ℹ️ Todas as notas já possuem CNPJ ou não têm link de detalhe');
         for (const n of notas) {
             delete n._pdfLink; delete n._link; delete n._onclick;
             delete n._tomadorOriginal; delete n._prestadorOriginal;
@@ -741,7 +742,7 @@ async function enriquecerDadosClientes(page, notas) {
         return;
     }
 
-    console.log(`🔍 Enriquecendo ${notasParaEnriquecer.length}/${notas.length} notas via download de PDF...`);
+    logger.info(`🔍 Enriquecendo ${notasParaEnriquecer.length}/${notas.length} notas via download de PDF...`);
     ensureDebugDir();
 
     const urlListagem = page.url();
@@ -754,7 +755,7 @@ async function enriquecerDadosClientes(page, notas) {
         const progresso = `[${idx + 1}/${notasParaEnriquecer.length}]`;
 
         try {
-            console.log(`   ${progresso} NF #${numNota} (${(nota.razao_social || '').substring(0, 15)})...`);
+            logger.info(`   ${progresso} NF #${numNota} (${(nota.razao_social || '').substring(0, 15)})...`);
 
             const alvoEhTomador = !nota._servicoContratado;
             let dados = null;
@@ -848,7 +849,7 @@ async function enriquecerDadosClientes(page, notas) {
                 if (dados.estado) nota.estado = dados.estado;
                 if (dados.cidade) nota.cidade = dados.cidade;
                 enriquecidos++;
-                console.log(`      ✅ CNPJ: ${dados.cnpj}${dados.razaoCompleta ? ' — ' + dados.razaoCompleta.substring(0, 40) : ''}`);
+                logger.info(`      ✅ CNPJ: ${dados.cnpj}${dados.razaoCompleta ? ' — ' + dados.razaoCompleta.substring(0, 40) : ''}`);
 
                 try {
                     const razaoCurta = nota._tomadorOriginal || nota.razao_social || '';
@@ -867,12 +868,12 @@ async function enriquecerDadosClientes(page, notas) {
                     });
                 } catch(e) {}
             } else {
-                console.log(`      ⚠️ CNPJ não encontrado para NF #${numNota}`);
+                logger.info(`      ⚠️ CNPJ não encontrado para NF #${numNota}`);
                 erros++;
             }
 
         } catch(e) {
-            console.warn(`      ❌ Erro NF #${numNota}: ${e.message.substring(0, 80)}`);
+            logger.warn(`      ❌ Erro NF #${numNota}: ${e.message.substring(0, 80)}`);
             erros++;
         }
     }
@@ -884,7 +885,7 @@ async function enriquecerDadosClientes(page, notas) {
         delete n._servicoContratado; delete n._razaoCurta;
     }
 
-    console.log(`✅ Enriquecimento: ${enriquecidos}/${notasParaEnriquecer.length} notas com CNPJ (${erros} erros)`);
+    logger.info(`✅ Enriquecimento: ${enriquecidos}/${notasParaEnriquecer.length} notas com CNPJ (${erros} erros)`);
 }
 
 /**
@@ -899,7 +900,7 @@ async function processarDownloadPdf(download, numNota, alvoEhTomador) {
         if (!fs.existsSync(NOTAS_PDF_DIR)) fs.mkdirSync(NOTAS_PDF_DIR, { recursive: true });
         const destPath = path.join(NOTAS_PDF_DIR, `NF-${numNota}.pdf`);
         fs.copyFileSync(tmpPath, destPath);
-        console.log(`      📄 PDF salvo: notas_pdf/NF-${numNota}.pdf`);
+        logger.info(`      📄 PDF salvo: notas_pdf/NF-${numNota}.pdf`);
 
         // Ler e extrair texto
         const pdfBuffer = fs.readFileSync(destPath);
@@ -910,7 +911,7 @@ async function processarDownloadPdf(download, numNota, alvoEhTomador) {
 
         return extrairDadosDoPdfText(pdfData.text, alvoEhTomador);
     } catch(e) {
-        console.log(`      ❌ PDF falhou: ${e.message.substring(0, 80)}`);
+        logger.info(`      ❌ PDF falhou: ${e.message.substring(0, 80)}`);
         return null;
     }
 }
@@ -1116,12 +1117,12 @@ async function salvarNotasExtraidas(notas, syncId) {
             db.inserirNota(nota);
             inseridos++;
         } catch (error) {
-            console.warn(`⚠️ Erro ao inserir nota ${nota.numero}:`, error.message);
+            logger.warn(`⚠️ Erro ao inserir nota ${nota.numero}: ${error.message}`);
             ignorados++;
         }
     }
 
-    console.log(`💾 Notas salvas: ${inseridos} novas, ${atualizados} atualizadas com CNPJ, ${ignorados} ignoradas`);
+    logger.info(`💾 Notas salvas: ${inseridos} novas, ${atualizados} atualizadas com CNPJ, ${ignorados} ignoradas`);
     return { inseridos, ignorados, atualizados, total: notas.length };
 }
 
@@ -1132,7 +1133,7 @@ async function encerrarSessao() {
             if (sessaoAtiva.browser) await sessaoAtiva.browser.close();
         } catch (e) { /* ignorar */ }
         sessaoAtiva = null;
-        console.log('🛑 Sessão de scraping encerrada');
+        logger.info('🛑 Sessão de scraping encerrada');
     }
 }
 
@@ -1179,10 +1180,10 @@ async function sincronizarAutomatico(login, senha, onProgresso) {
 
         // Resolver com OCR
         const resultado = await ocr.resolverCaptcha(captchaBuffer);
-        console.log(`🔤 Tentativa ${tentativa}: OCR leu "${resultado.texto}" (confiança: ${Math.round(resultado.confianca)}%)`);
+        logger.info(`🔤 Tentativa ${tentativa}: OCR leu "${resultado.texto}" (confiança: ${Math.round(resultado.confianca)}%)`);
 
         if (!resultado.texto || resultado.texto.length < 3) {
-            console.log('⚠️ OCR não conseguiu ler texto válido, renovando CAPTCHA...');
+            logger.info('⚠️ OCR não conseguiu ler texto válido, renovando CAPTCHA...');
             if (tentativa < MAX_TENTATIVAS_OCR) {
                 await capturarNovoCaptcha();
                 continue;
@@ -1211,7 +1212,7 @@ async function sincronizarAutomatico(login, senha, onProgresso) {
         }
 
         // Falhou — CAPTCHA incorreto
-        console.log(`❌ Tentativa ${tentativa} falhou: ${loginResult.error}`);
+        logger.info(`❌ Tentativa ${tentativa} falhou: ${loginResult.error}`);
 
         if (tentativa >= MAX_TENTATIVAS_OCR) break;
 
@@ -1235,7 +1236,7 @@ async function sincronizarAutomatico(login, senha, onProgresso) {
             captchaImageBase64 = `data:image/png;base64,${novoCaptcha.toString('base64')}`;
         }
     } catch (e) {
-        console.warn('Não foi possível capturar CAPTCHA para fallback manual:', e.message);
+        logger.warn(`Não foi possível capturar CAPTCHA para fallback manual: ${e.message}`);
     }
     return {
         success: false,
@@ -1257,7 +1258,7 @@ async function obterCaptchaBuffer() {
         }
         return null;
     } catch (e) {
-        console.error('Erro ao obter buffer do CAPTCHA:', e.message);
+        logger.error({ err: e.message }, 'Erro ao obter buffer do CAPTCHA');
         return null;
     }
 }
