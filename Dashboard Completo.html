@@ -1079,15 +1079,20 @@ window.DataService = new DataService();
 // FILTERS MANAGER
 // ═══════════════════════════════════════════════
 class FiltersManager {
-    constructor() { this.data=null; this.filters={dateStart:null,dateEnd:null,estado:'',cnpj:'',status:[]}; this.timeout=null; }
+    constructor() { this.data=null; this.filters={dateStart:null,dateEnd:null,estado:'',cnpj:'',status:[]}; this.timeout=null; this._initialized=false; }
 
     init(data) {
         this.data = data;
         this.populateUF(data);
         this.populateCNPJ(data);
         this.populateStatus(data);
-        this.loadSaved();
-        this.listen();
+        if(!this._initialized) {
+            this.loadSaved();
+            this.listen();
+            this._initialized = true;
+        }
+        this.restoreUI();
+        this.apply();
     }
     populateUF(data) {
         const el=document.getElementById('ufFilter'); if(!el) return;
@@ -1110,13 +1115,30 @@ class FiltersManager {
         document.getElementById('cnpjFilter')?.addEventListener('change',e=>{this.filters.cnpj=e.target.value;this.auto();});
         document.getElementById('statusFilters')?.addEventListener('change',e=>{if(e.target.type==='checkbox'){this.filters.status=[...document.querySelectorAll('#statusFilters input:checked')].map(c=>c.value);this.auto();}});
     }
+    // Reaplica `this.filters` (memoria) na UI apos repopular dropdowns.
+    // Diferente de loadSaved() que le do localStorage.
+    restoreUI() {
+        const uf=document.getElementById('ufFilter'); if(uf) uf.value=this.filters.estado||'';
+        const cnpj=document.getElementById('cnpjFilter'); if(cnpj) cnpj.value=this.filters.cnpj||'';
+        document.querySelectorAll('#statusFilters input').forEach(c=>c.checked=this.filters.status.includes(c.value));
+        const sd=document.getElementById('startDate'); if(this.filters.dateStart && sd?._flatpickr) sd._flatpickr.setDate(this.filters.dateStart, false);
+        const ed=document.getElementById('endDate'); if(this.filters.dateEnd && ed?._flatpickr) ed._flatpickr.setDate(this.filters.dateEnd, false);
+    }
     updateDate(type,date){this.filters[type==='start'?'dateStart':'dateEnd']=date;this.auto();}
     auto(){clearTimeout(this.timeout);this.timeout=setTimeout(()=>this.apply(),200);}
     apply() {
         if(!this.data) return;
+        clearTimeout(this.timeout);
         let d=[...this.data];
-        if(this.filters.dateStart) d=d.filter(r=>r.dataEmissao&&r.dataEmissao>=this.filters.dateStart);
-        if(this.filters.dateEnd) d=d.filter(r=>r.dataEmissao&&r.dataEmissao<=this.filters.dateEnd);
+        if(this.filters.dateStart) {
+            const start=new Date(this.filters.dateStart); start.setHours(0,0,0,0);
+            d=d.filter(r=>r.dataEmissao&&r.dataEmissao>=start);
+        }
+        if(this.filters.dateEnd) {
+            // Inclui o dia inteiro do "Ate" (ate 23:59:59.999) — antes excluia o proprio dia final.
+            const end=new Date(this.filters.dateEnd); end.setHours(23,59,59,999);
+            d=d.filter(r=>r.dataEmissao&&r.dataEmissao<=end);
+        }
         if(this.filters.estado) d=d.filter(r=>r.estado===this.filters.estado);
         if(this.filters.cnpj) d=d.filter(r=>(r.cnpj||r.razaoSocial)===this.filters.cnpj);
         if(this.filters.status.length) d=d.filter(r=>this.filters.status.includes(r.statusConciliado));
@@ -1125,24 +1147,25 @@ class FiltersManager {
     }
     clear() {
         this.filters={dateStart:null,dateEnd:null,estado:'',cnpj:'',status:[]};
-        document.getElementById('ufFilter').value='';
-        document.getElementById('cnpjFilter').value='';
+        const uf=document.getElementById('ufFilter'); if(uf) uf.value='';
+        const cnpj=document.getElementById('cnpjFilter'); if(cnpj) cnpj.value='';
         document.querySelectorAll('#statusFilters input').forEach(c=>c.checked=false);
-        const sd=document.getElementById('startDate'); if(sd._flatpickr) sd._flatpickr.clear();
-        const ed=document.getElementById('endDate'); if(ed._flatpickr) ed._flatpickr.clear();
+        const sd=document.getElementById('startDate'); if(sd?._flatpickr) sd._flatpickr.clear();
+        const ed=document.getElementById('endDate'); if(ed?._flatpickr) ed._flatpickr.clear();
         localStorage.removeItem('avant-filters');
         this.apply();
     }
     save(){try{localStorage.setItem('avant-filters',JSON.stringify({...this.filters,dateStart:this.filters.dateStart?.toISOString(),dateEnd:this.filters.dateEnd?.toISOString()}));}catch(e){}}
+    // Apenas hidrata `this.filters` a partir do localStorage. UI fica em restoreUI().
     loadSaved(){
         try{
             const s=localStorage.getItem('avant-filters'); if(!s) return;
             const f=JSON.parse(s);
-            if(f.dateStart){this.filters.dateStart=new Date(f.dateStart);document.getElementById('startDate')?._flatpickr?.setDate(this.filters.dateStart);}
-            if(f.dateEnd){this.filters.dateEnd=new Date(f.dateEnd);document.getElementById('endDate')?._flatpickr?.setDate(this.filters.dateEnd);}
-            if(f.estado){this.filters.estado=f.estado;document.getElementById('ufFilter').value=f.estado;}
-            if(f.cnpj){this.filters.cnpj=f.cnpj;document.getElementById('cnpjFilter').value=f.cnpj;}
-            if(f.status?.length){this.filters.status=f.status;document.querySelectorAll('#statusFilters input').forEach(c=>c.checked=f.status.includes(c.value));}
+            if(f.dateStart) this.filters.dateStart=new Date(f.dateStart);
+            if(f.dateEnd) this.filters.dateEnd=new Date(f.dateEnd);
+            if(f.estado) this.filters.estado=f.estado;
+            if(f.cnpj) this.filters.cnpj=f.cnpj;
+            if(f.status?.length) this.filters.status=f.status;
         }catch(e){localStorage.removeItem('avant-filters');}
     }
 }
@@ -1766,9 +1789,10 @@ class DashboardApp {
     processData(data) {
         this.data = data;
         this.filteredData = [...data];
-        this.updateSummary();
+        // FiltersManager.init() agora encadeia restoreUI() -> apply() -> updateFiltered() -> renderAll().
+        // Evita renderizar duas vezes (sem filtro e depois com filtro), o que causava flash visual
+        // e divergencia entre painel "Filtrados" e KPIs/tabela.
         window.FiltersManager.init(data);
-        this.renderAll(this.filteredData);
         this.showContent();
     }
 
