@@ -1,0 +1,56 @@
+{
+  "name": "dashboard-nfse",
+  "version": "1.1.0",
+  "description": "Dashboard Analítico de Notas Fiscais — AVANT Serviços",
+  "main": "server/index.js",
+  "scripts": {
+    "start": "node server/index.js",
+    "dev": "node --watch server/index.js",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/uillenmachado/dashboard.git"
+  },
+  "keywords": [
+    "nfse",
+    "dashboard",
+    "playwright",
+    "ocr",
+    "express",
+    "sqlite"
+  ],
+  "author": "Uillen Machado",
+  "license": "ISC",
+  "type": "commonjs",
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "bugs": {
+    "url": "https://github.com/uillenmachado/dashboard/issues"
+  },
+  "homepage": "https://github.com/uillenmachado/dashboard#readme",
+  "dependencies": {
+    "better-sqlite3": "^12.8.0",
+    "cors": "^2.8.6",
+    "dotenv": "^17.3.1",
+    "express": "^5.2.1",
+    "express-rate-limit": "^8.3.1",
+    "helmet": "^8.1.0",
+    "multer": "^2.1.1",
+    "node-cron": "^4.2.1",
+    "pdf-parse": "^1.1.1",
+    "pino": "^9.14.0",
+    "pino-pretty": "^11.3.0",
+    "playwright": "^1.58.2",
+    "playwright-extra": "^4.3.6",
+    "puppeteer-extra-plugin-stealth": "^2.11.2",
+    "sharp": "^0.34.5",
+    "tesseract.js": "^7.0.0",
+    "xlsx": "^0.18.5"
+  },
+  "devDependencies": {
+    "vitest": "^2.1.9"
+  }
+}

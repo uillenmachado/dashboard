@@ -1,0 +1,40 @@
+# Dependências
+node_modules/
+
+# Banco e dados
+data/
+*.db
+*.db-shm
+*.db-wal
+
+# Configuração local
+.env
+.env.local
+
+# Logs
+*.log
+logs/
+
+# OCR
+eng.traineddata
+
+# Scripts e backups locais (dev-only, não versionar)
+scripts/
+_test_*
+_analyze_*
+_reprocessar_*
+*.backup.html
+*.backup.*
+
+# Planilhas-fonte locais (não versionar dados fiscais reais)
+base de dados.xlsx
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Coverage / build
+coverage/
+dist/

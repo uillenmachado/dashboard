@@ -1,0 +1,2306 @@
+<!DOCTYPE html>
+<html lang="pt-BR" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AVANT Serviços - Dashboard Financeiro</title>
+    
+    <!-- Tailwind CSS + daisyUI -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/daisyui@4.4.19/dist/full.min.css" rel="stylesheet" type="text/css" />
+    
+    <!-- Chart.js + Datalabels -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
+    
+    <!-- SheetJS -->
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
+    
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@0.294.0/dist/umd/lucide.js"></script>
+    
+    <!-- Flatpickr -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/pt.js"></script>
+
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+
+    <script>
+    tailwind.config = {
+        theme: {
+            extend: {
+                fontFamily: { sans: ['Inter', 'system-ui', 'sans-serif'] }
+            }
+        }
+    }
+    </script>
+
+    <style>
+/* ─── Base ─── */
+* { transition: background-color 0.2s, color 0.2s, border-color 0.2s, box-shadow 0.2s; }
+body { font-family: 'Inter', system-ui, sans-serif; }
+
+/* ─── Scrollbar ─── */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: hsl(var(--bc) / 0.15); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: hsl(var(--bc) / 0.3); }
+
+/* ─── Glass Card ─── */
+.glass-card {
+    background: hsl(var(--b1) / 0.7);
+    backdrop-filter: blur(12px);
+    border: 1px solid hsl(var(--bc) / 0.06);
+    border-radius: 1rem;
+}
+
+/* ─── KPI Card ─── */
+.kpi-card {
+    position: relative;
+    overflow: hidden;
+    border-radius: 1rem;
+    padding: 1.25rem;
+    background: hsl(var(--b1));
+    border: 1px solid hsl(var(--bc) / 0.06);
+    transition: transform 0.2s, box-shadow 0.2s;
+    cursor: pointer;
+}
+.kpi-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 12px 40px -12px hsl(var(--bc) / 0.15);
+}
+.kpi-card .kpi-accent {
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 3px;
+    border-radius: 1rem 1rem 0 0;
+}
+
+/* ─── Stat Mini ─── */
+.stat-mini {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem 1rem;
+    border-radius: 0.75rem;
+    background: hsl(var(--b2));
+}
+
+/* ─── Chart Wrapper ─── */
+.chart-wrapper {
+    background: hsl(var(--b1));
+    border: 1px solid hsl(var(--bc) / 0.06);
+    border-radius: 1rem;
+    padding: 1.5rem;
+}
+
+/* ─── Glow Effects ─── */
+.glow-green { box-shadow: 0 0 20px hsl(142 71% 45% / 0.15); }
+.glow-blue { box-shadow: 0 0 20px hsl(217 91% 60% / 0.15); }
+.glow-amber { box-shadow: 0 0 20px hsl(38 92% 50% / 0.15); }
+.glow-red { box-shadow: 0 0 20px hsl(0 84% 60% / 0.15); }
+
+/* ─── Animated Gradient BG ─── */
+.hero-gradient {
+    background: linear-gradient(135deg, hsl(var(--p) / 0.08) 0%, hsl(var(--s) / 0.05) 50%, hsl(var(--a) / 0.03) 100%);
+}
+
+/* ─── Pulse dot ─── */
+.pulse-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    animation: pulse-ring 2s ease infinite;
+}
+@keyframes pulse-ring {
+    0% { box-shadow: 0 0 0 0 currentColor; }
+    70% { box-shadow: 0 0 0 6px transparent; }
+    100% { box-shadow: 0 0 0 0 transparent; }
+}
+
+/* ─── Table ─── */
+.data-table th {
+    position: sticky;
+    top: 0;
+    background: hsl(var(--b2));
+    z-index: 2;
+    font-weight: 600;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: hsl(var(--bc) / 0.6);
+}
+.data-table td {
+    font-size: 0.8125rem;
+    padding: 0.625rem 0.75rem;
+    border-bottom: 1px solid hsl(var(--bc) / 0.04);
+}
+.data-table tr:hover td {
+    background: hsl(var(--bc) / 0.02);
+}
+
+/* ─── Badge ─── */
+.badge-status {
+    font-size: 0.6875rem;
+    font-weight: 600;
+    padding: 0.2rem 0.625rem;
+    border-radius: 2rem;
+    letter-spacing: 0.025em;
+}
+
+/* ─── Loading shimmer ─── */
+.shimmer {
+    background: linear-gradient(90deg, hsl(var(--b2)) 25%, hsl(var(--b3)) 50%, hsl(var(--b2)) 75%);
+    background-size: 200% 100%;
+    animation: shimmer 1.5s infinite;
+}
+@keyframes shimmer {
+    0% { background-position: -200% 0; }
+    100% { background-position: 200% 0; }
+}
+
+/* ─── Fade In ─── */
+.fade-in { animation: fadeIn 0.5s ease-out; }
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* ─── Flatpickr override ─── */
+.flatpickr-calendar { background: hsl(var(--b1)); border: 1px solid hsl(var(--b3)); }
+.flatpickr-day { color: hsl(var(--bc)); }
+.flatpickr-day:hover { background: hsl(var(--b2)); }
+.flatpickr-day.selected { background: hsl(var(--p)); color: hsl(var(--pc)); }
+
+/* ─── Responsive ─── */
+@media (max-width: 768px) {
+    .hide-mobile { display: none !important; }
+}
+
+/* ─── Print ─── */
+@media print {
+    .no-print { display: none !important; }
+    .kpi-card { break-inside: avoid; }
+}
+
+/* ─── Focus ─── */
+.btn:focus-visible, .input:focus-visible, .select:focus-visible {
+    outline: 2px solid hsl(var(--p));
+    outline-offset: 2px;
+}
+    </style>
+</head>
+
+<body class="bg-base-100 text-base-content min-h-screen">
+
+<!-- ═══════════ LOADING OVERLAY ═══════════ -->
+<div id="loadingOverlay" class="fixed inset-0 bg-base-100/90 backdrop-blur-sm flex items-center justify-center z-[100] hidden">
+    <div class="text-center fade-in">
+        <span class="loading loading-bars loading-lg text-primary"></span>
+        <p id="loadingMsg" class="mt-4 text-sm font-medium opacity-70">Processando...</p>
+    </div>
+</div>
+
+<!-- ═══════════ NAVBAR ═══════════ -->
+<nav class="navbar bg-base-200/80 backdrop-blur-md shadow-sm sticky top-0 z-40 no-print px-4 lg:px-6">
+    <div class="flex-1 gap-3">
+        <label for="sidebar-drawer" class="btn btn-sm btn-ghost btn-square lg:hidden">
+            <i data-lucide="panel-left" class="w-5 h-5"></i>
+        </label>
+        <div class="flex items-center gap-2.5">
+            <div class="w-9 h-9 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center shadow-md">
+                <i data-lucide="bar-chart-3" class="w-5 h-5 text-white"></i>
+            </div>
+            <div>
+                <h1 class="text-base font-bold leading-tight">AVANT Serviços</h1>
+                <p class="text-[0.65rem] opacity-50 leading-none hide-mobile">Dashboard Financeiro</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="flex-none flex items-center gap-2">
+        <div class="tooltip tooltip-bottom" data-tip="Cadastro de Clientes (CNPJ)">
+            <button id="btnClientes" class="btn btn-sm gap-1.5 btn-secondary">
+                <i data-lucide="building-2" class="w-3.5 h-3.5"></i>
+                <span class="hide-mobile">Clientes</span>
+            </button>
+        </div>
+        <div class="tooltip tooltip-bottom" data-tip="Sync Pagamentos (Finnet/Cimed)">
+            <button id="btnSyncPagamentos" class="btn btn-sm gap-1.5 btn-info">
+                <i data-lucide="landmark" class="w-3.5 h-3.5"></i>
+                <span class="hide-mobile">Pagamentos</span>
+            </button>
+        </div>
+        <div class="tooltip tooltip-bottom" data-tip="Sincronizar NFS-e">
+            <button id="btnSincronizar" class="btn btn-sm gap-1.5 btn-warning">
+                <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>
+                <span class="hide-mobile">Sincronizar</span>
+            </button>
+        </div>
+        <div class="tooltip tooltip-bottom" data-tip="Nova Nota">
+            <button id="btnNovaNota" class="btn btn-sm gap-1.5 btn-success">
+                <i data-lucide="plus" class="w-3.5 h-3.5"></i>
+                <span class="hide-mobile">Nova</span>
+            </button>
+        </div>
+        <div class="tooltip tooltip-bottom" data-tip="Importar Excel">
+            <label for="fileInput" class="btn btn-sm btn-ghost gap-1.5">
+                <i data-lucide="upload" class="w-3.5 h-3.5"></i>
+                <span class="hide-mobile">Importar</span>
+            </label>
+            <input type="file" id="fileInput" accept=".xlsx,.xls" class="hidden">
+        </div>
+        <div class="divider divider-horizontal mx-0 hide-mobile"></div>
+        <button id="themeToggle" class="btn btn-sm btn-ghost btn-square" title="Alternar tema">
+            <i data-lucide="sun" class="w-4 h-4 theme-light"></i>
+            <i data-lucide="moon" class="w-4 h-4 theme-dark hidden"></i>
+        </button>
+    </div>
+</nav>
+
+<!-- ═══════════ MAIN LAYOUT ═══════════ -->
+<div class="drawer lg:drawer-open">
+    <input id="sidebar-drawer" type="checkbox" class="drawer-toggle" />
+
+    <!-- SIDEBAR -->
+    <div class="drawer-side z-30 no-print">
+        <label for="sidebar-drawer" class="drawer-overlay"></label>
+        <aside class="w-72 min-h-full bg-base-200 p-5 space-y-5">
+            <h2 class="text-sm font-semibold flex items-center gap-2 opacity-80">
+                <i data-lucide="sliders-horizontal" class="w-4 h-4"></i> Filtros
+            </h2>
+
+            <!-- Period -->
+            <div class="space-y-1.5">
+                <label class="text-xs font-medium opacity-60 uppercase tracking-wider">Período</label>
+                <div class="grid grid-cols-2 gap-2">
+                    <input type="text" id="startDate" placeholder="De" class="input input-bordered input-sm text-xs">
+                    <input type="text" id="endDate" placeholder="Até" class="input input-bordered input-sm text-xs">
+                </div>
+            </div>
+
+            <!-- Estado -->
+            <div class="space-y-1.5">
+                <label class="text-xs font-medium opacity-60 uppercase tracking-wider">Estado (UF)</label>
+                <select id="ufFilter" class="select select-bordered select-sm w-full text-xs">
+                    <option value="">Todos</option>
+                </select>
+            </div>
+
+            <!-- CNPJ -->
+            <div class="space-y-1.5">
+                <label class="text-xs font-medium opacity-60 uppercase tracking-wider">Cliente / CNPJ</label>
+                <select id="cnpjFilter" class="select select-bordered select-sm w-full text-xs">
+                    <option value="">Todos</option>
+                </select>
+            </div>
+
+            <!-- Status -->
+            <div class="space-y-1.5">
+                <label class="text-xs font-medium opacity-60 uppercase tracking-wider">Status</label>
+                <div id="statusFilters" class="space-y-1"></div>
+            </div>
+
+            <!-- Actions -->
+            <div class="flex gap-2 pt-2">
+                <button id="clearFilters" class="btn btn-outline btn-xs flex-1 gap-1">
+                    <i data-lucide="x" class="w-3 h-3"></i> Limpar
+                </button>
+                <button id="applyFilters" class="btn btn-primary btn-xs flex-1 gap-1">
+                    <i data-lucide="check" class="w-3 h-3"></i> Aplicar
+                </button>
+            </div>
+
+            <!-- Summary -->
+            <div class="bg-base-100 rounded-xl p-3.5 space-y-2 text-xs">
+                <h3 class="font-semibold text-sm">Resumo</h3>
+                <div class="flex justify-between"><span class="opacity-60">Total:</span><span id="totalRecords" class="font-semibold">—</span></div>
+                <div class="flex justify-between"><span class="opacity-60">Filtrados:</span><span id="filteredRecords" class="font-semibold">—</span></div>
+                <div class="flex justify-between"><span class="opacity-60">Atualizado:</span><span id="lastUpdate" class="font-medium text-[0.65rem] opacity-50">—</span></div>
+            </div>
+        </aside>
+    </div>
+
+    <!-- CONTENT -->
+    <div class="drawer-content">
+        <main class="p-4 lg:p-6 max-w-[1600px] mx-auto space-y-6 fade-in">
+
+            <!-- Welcome -->
+            <div id="welcomeMessage" class="alert shadow-sm">
+                <i data-lucide="info" class="w-5 h-5 text-info"></i>
+                <div>
+                    <h3 class="font-bold text-sm">Bem-vindo ao Dashboard Financeiro</h3>
+                    <p class="text-xs opacity-70">Carregando dados do banco... Se vazio, importe uma planilha ou sincronize com o portal NFS-e.</p>
+                </div>
+            </div>
+
+            <!-- Connection Error -->
+            <div id="connectionStatus" class="alert alert-warning hidden">
+                <i data-lucide="wifi-off" class="w-5 h-5"></i>
+                <span class="text-sm">Servidor offline. Inicie com <code class="kbd kbd-xs">start.bat</code>.</span>
+            </div>
+
+            <!-- ═══ HERO METRICS ═══ -->
+            <section id="heroSection" class="hidden">
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-3 lg:gap-4">
+                    <!-- Hero KPI 1 - Faturamento Bruto -->
+                    <div class="kpi-card glow-green" onclick="window.KPICards?.showKPIDetails('faturamento-bruto')">
+                        <div class="kpi-accent bg-gradient-to-r from-emerald-400 to-green-500"></div>
+                        <div class="flex items-center gap-2 mb-2">
+                            <div class="w-8 h-8 rounded-lg bg-emerald-500/10 flex items-center justify-center">
+                                <i data-lucide="trending-up" class="w-4 h-4 text-emerald-500"></i>
+                            </div>
+                            <span class="text-[0.65rem] font-medium opacity-50 uppercase tracking-wider">Faturamento Bruto</span>
+                        </div>
+                        <div id="kpi-bruto" class="text-xl lg:text-2xl font-bold">—</div>
+                        <div id="kpi-bruto-sub" class="text-[0.65rem] opacity-40 mt-0.5"></div>
+                    </div>
+
+                    <!-- Hero KPI 2 - Faturamento Líquido -->
+                    <div class="kpi-card glow-blue" onclick="window.KPICards?.showKPIDetails('faturamento-liquido')">
+                        <div class="kpi-accent bg-gradient-to-r from-blue-400 to-indigo-500"></div>
+                        <div class="flex items-center gap-2 mb-2">
+                            <div class="w-8 h-8 rounded-lg bg-blue-500/10 flex items-center justify-center">
+                                <i data-lucide="wallet" class="w-4 h-4 text-blue-500"></i>
+                            </div>
+                            <span class="text-[0.65rem] font-medium opacity-50 uppercase tracking-wider">Fat. Líquido</span>
+                        </div>
+                        <div id="kpi-liquido" class="text-xl lg:text-2xl font-bold">—</div>
+                        <div id="kpi-liquido-sub" class="text-[0.65rem] opacity-40 mt-0.5"></div>
+                    </div>
+
+                    <!-- Hero KPI 3 - Valor Recebido -->
+                    <div class="kpi-card glow-green" onclick="window.KPICards?.showKPIDetails('valor-recebido')">
+                        <div class="kpi-accent bg-gradient-to-r from-green-400 to-emerald-500"></div>
+                        <div class="flex items-center gap-2 mb-2">
+                            <div class="w-8 h-8 rounded-lg bg-green-500/10 flex items-center justify-center">
+                                <i data-lucide="check-circle-2" class="w-4 h-4 text-green-500"></i>
+                            </div>
+                            <span class="text-[0.65rem] font-medium opacity-50 uppercase tracking-wider">Recebido</span>
+                        </div>
+                        <div id="kpi-recebido" class="text-xl lg:text-2xl font-bold text-success">—</div>
+                        <div id="kpi-recebido-sub" class="text-[0.65rem] opacity-40 mt-0.5"></div>
+                    </div>
+
+                    <!-- Hero KPI 4 - Em Aberto -->
+                    <div class="kpi-card glow-amber" onclick="window.KPICards?.showKPIDetails('valor-em-aberto')">
+                        <div class="kpi-accent bg-gradient-to-r from-amber-400 to-orange-500"></div>
+                        <div class="flex items-center gap-2 mb-2">
+                            <div class="w-8 h-8 rounded-lg bg-amber-500/10 flex items-center justify-center">
+                                <i data-lucide="clock" class="w-4 h-4 text-amber-500"></i>
+                            </div>
+                            <span class="text-[0.65rem] font-medium opacity-50 uppercase tracking-wider">Em Aberto</span>
+                        </div>
+                        <div id="kpi-aberto" class="text-xl lg:text-2xl font-bold text-warning">—</div>
+                        <div id="kpi-aberto-sub" class="text-[0.65rem] opacity-40 mt-0.5"></div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ═══ SECONDARY METRICS ═══ -->
+            <section id="secondarySection" class="hidden">
+                <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+                    <div class="stat-mini" onclick="window.KPICards?.showKPIDetails('numero-notas')">
+                        <div class="w-8 h-8 rounded-lg bg-violet-500/10 flex items-center justify-center flex-shrink-0">
+                            <i data-lucide="file-text" class="w-4 h-4 text-violet-500"></i>
+                        </div>
+                        <div>
+                            <div id="kpi-qtd" class="text-base font-bold">—</div>
+                            <div class="text-[0.6rem] opacity-50">Notas</div>
+                        </div>
+                    </div>
+                    <div class="stat-mini">
+                        <div class="w-8 h-8 rounded-lg bg-cyan-500/10 flex items-center justify-center flex-shrink-0">
+                            <i data-lucide="calculator" class="w-4 h-4 text-cyan-500"></i>
+                        </div>
+                        <div>
+                            <div id="kpi-ticket" class="text-base font-bold">—</div>
+                            <div class="text-[0.6rem] opacity-50">Ticket Médio</div>
+                        </div>
+                    </div>
+                    <div class="stat-mini">
+                        <div class="w-8 h-8 rounded-lg bg-emerald-500/10 flex items-center justify-center flex-shrink-0">
+                            <i data-lucide="percent" class="w-4 h-4 text-emerald-500"></i>
+                        </div>
+                        <div>
+                            <div id="kpi-pctrecebido" class="text-base font-bold">—</div>
+                            <div class="text-[0.6rem] opacity-50">% Recebido</div>
+                        </div>
+                    </div>
+                    <div class="stat-mini">
+                        <div class="w-8 h-8 rounded-lg bg-blue-500/10 flex items-center justify-center flex-shrink-0">
+                            <i data-lucide="calendar" class="w-4 h-4 text-blue-500"></i>
+                        </div>
+                        <div>
+                            <div id="kpi-dso" class="text-base font-bold">—</div>
+                            <div class="text-[0.6rem] opacity-50">DSO Médio</div>
+                        </div>
+                    </div>
+                    <div class="stat-mini">
+                        <div class="w-8 h-8 rounded-lg bg-rose-500/10 flex items-center justify-center flex-shrink-0">
+                            <i data-lucide="receipt" class="w-4 h-4 text-rose-500"></i>
+                        </div>
+                        <div>
+                            <div id="kpi-iss" class="text-base font-bold">—</div>
+                            <div class="text-[0.6rem] opacity-50">ISS Total</div>
+                        </div>
+                    </div>
+                    <div class="stat-mini">
+                        <div class="w-8 h-8 rounded-lg bg-orange-500/10 flex items-center justify-center flex-shrink-0">
+                            <i data-lucide="alert-triangle" class="w-4 h-4 text-orange-500"></i>
+                        </div>
+                        <div>
+                            <div id="kpi-aging90" class="text-base font-bold">—</div>
+                            <div class="text-[0.6rem] opacity-50">Aging 90+</div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ═══ CHARTS ROW 1 ═══ -->
+            <section id="chartsSection" class="hidden space-y-6">
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 lg:gap-6">
+                    <!-- Revenue Trend (2/3) -->
+                    <div class="chart-wrapper lg:col-span-2">
+                        <div class="flex items-center justify-between mb-4">
+                            <h3 class="text-sm font-semibold flex items-center gap-2">
+                                <i data-lucide="trending-up" class="w-4 h-4 text-primary"></i>
+                                Faturamento Mensal
+                            </h3>
+                            <span class="badge badge-ghost badge-sm">12 meses</span>
+                        </div>
+                        <div class="h-64 lg:h-72"><canvas id="revenueTrendChart"></canvas></div>
+                    </div>
+
+                    <!-- Status Donut (1/3) -->
+                    <div class="chart-wrapper">
+                        <div class="flex items-center justify-between mb-4">
+                            <h3 class="text-sm font-semibold flex items-center gap-2">
+                                <i data-lucide="pie-chart" class="w-4 h-4 text-primary"></i>
+                                Status
+                            </h3>
+                        </div>
+                        <div class="h-64 lg:h-72 flex items-center justify-center"><canvas id="statusChart"></canvas></div>
+                    </div>
+                </div>
+
+                <!-- ═══ CHARTS ROW 2 ═══ -->
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-6">
+                    <!-- Recebido vs Em Aberto -->
+                    <div class="chart-wrapper">
+                        <div class="flex items-center justify-between mb-4">
+                            <h3 class="text-sm font-semibold flex items-center gap-2">
+                                <i data-lucide="bar-chart-2" class="w-4 h-4 text-primary"></i>
+                                Recebido vs Em Aberto
+                            </h3>
+                        </div>
+                        <div class="h-64"><canvas id="recebidoChart"></canvas></div>
+                    </div>
+
+                    <!-- Aging de Recebíveis -->
+                    <div class="chart-wrapper">
+                        <div class="flex items-center justify-between mb-4">
+                            <h3 class="text-sm font-semibold flex items-center gap-2">
+                                <i data-lucide="timer" class="w-4 h-4 text-primary"></i>
+                                Aging de Recebíveis
+                            </h3>
+                        </div>
+                        <div class="h-64"><canvas id="agingChart"></canvas></div>
+                    </div>
+                </div>
+
+                <!-- ═══ CHARTS ROW 3 ═══ -->
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-6">
+                    <!-- DSO -->
+                    <div class="chart-wrapper">
+                        <div class="flex items-center justify-between mb-4">
+                            <h3 class="text-sm font-semibold flex items-center gap-2">
+                                <i data-lucide="activity" class="w-4 h-4 text-primary"></i>
+                                DSO Mensal
+                            </h3>
+                        </div>
+                        <div class="h-64"><canvas id="dsoChart"></canvas></div>
+                    </div>
+
+                    <!-- Top Clientes -->
+                    <div class="chart-wrapper">
+                        <div class="flex items-center justify-between mb-4">
+                            <h3 class="text-sm font-semibold flex items-center gap-2">
+                                <i data-lucide="users" class="w-4 h-4 text-primary"></i>
+                                Top Clientes
+                            </h3>
+                        </div>
+                        <div class="h-64"><canvas id="topClientesChart"></canvas></div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ═══ DETAILED KPI GRID ═══ -->
+            <section id="kpiGridSection" class="hidden">
+                <div class="flex items-center justify-between mb-4">
+                    <h2 class="text-base font-bold flex items-center gap-2">
+                        <i data-lucide="layout-grid" class="w-5 h-5 text-primary"></i>
+                        Indicadores Detalhados
+                    </h2>
+                    <button id="toggleKpiGrid" class="btn btn-ghost btn-xs gap-1">
+                        <i data-lucide="chevron-down" class="w-3 h-3" id="kpiGridChevron"></i>
+                        <span id="kpiGridToggleText">Expandir</span>
+                    </button>
+                </div>
+                <div id="kpiGrid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 hidden"></div>
+            </section>
+
+            <!-- ═══ NOTAS TABLE ═══ -->
+            <section id="tableSection" class="hidden">
+                <div class="chart-wrapper">
+                    <div class="flex items-center justify-between mb-4 flex-wrap gap-2">
+                        <h2 class="text-base font-bold flex items-center gap-2">
+                            <i data-lucide="table" class="w-5 h-5 text-primary"></i>
+                            Notas Fiscais
+                        </h2>
+                        <div class="flex items-center gap-2">
+                            <input type="text" id="tableSearch" placeholder="Buscar..." class="input input-bordered input-xs w-40">
+                            <button id="btnRelatorioCobranca" class="btn btn-error btn-xs gap-1" title="Relatório detalhado de notas não pagas para cobrança">
+                                <i data-lucide="file-warning" class="w-3 h-3"></i> Rel. Cobrança
+                            </button>
+                            <button id="exportTableCSV" class="btn btn-ghost btn-xs gap-1">
+                                <i data-lucide="download" class="w-3 h-3"></i> CSV
+                            </button>
+                        </div>
+                    </div>
+                    <div class="overflow-x-auto max-h-[500px] rounded-lg border border-base-300/50">
+                        <table class="table table-pin-rows data-table w-full">
+                            <thead>
+                                <tr>
+                                    <th class="cursor-pointer" data-sort="numero">Nº <i data-lucide="arrow-up-down" class="w-3 h-3 inline opacity-30"></i></th>
+                                    <th class="cursor-pointer" data-sort="razaoSocial">Razão Social <i data-lucide="arrow-up-down" class="w-3 h-3 inline opacity-30"></i></th>
+                                    <th class="cursor-pointer" data-sort="dataEmissao">Emissão <i data-lucide="arrow-up-down" class="w-3 h-3 inline opacity-30"></i></th>
+                                    <th class="cursor-pointer text-right" data-sort="valorNota">Valor Bruto <i data-lucide="arrow-up-down" class="w-3 h-3 inline opacity-30"></i></th>
+                                    <th class="cursor-pointer text-right" data-sort="valorLiquido">Valor Líquido <i data-lucide="arrow-up-down" class="w-3 h-3 inline opacity-30"></i></th>
+                                    <th class="cursor-pointer" data-sort="statusConciliado">Status <i data-lucide="arrow-up-down" class="w-3 h-3 inline opacity-30"></i></th>
+                                    <th class="cursor-pointer" data-sort="recebido">Recebido <i data-lucide="arrow-up-down" class="w-3 h-3 inline opacity-30"></i></th>
+                                    <th>Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tableBody"></tbody>
+                        </table>
+                    </div>
+                    <div class="flex items-center justify-between mt-3 text-xs opacity-60">
+                        <span id="tableInfo">—</span>
+                        <div class="flex gap-1">
+                            <button id="tablePrev" class="btn btn-xs btn-ghost" disabled>&lt;</button>
+                            <span id="tablePage" class="flex items-center px-2">1</span>
+                            <button id="tableNext" class="btn btn-xs btn-ghost">&gt;</button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+        </main>
+    </div>
+</div>
+
+<!-- ═══════════ CAPTCHA MODAL ═══════════ -->
+<dialog id="captchaModal" class="modal">
+    <div class="modal-box max-w-md">
+        <form method="dialog"><button class="btn btn-sm btn-circle btn-ghost absolute right-2 top-2">✕</button></form>
+        <h3 class="font-bold text-lg mb-3 flex items-center gap-2">
+            <i data-lucide="shield-check" class="w-5 h-5 text-warning"></i>
+            Sincronizar NFS-e
+        </h3>
+
+        <div id="captchaStep1" class="space-y-3">
+            <p class="text-xs opacity-60">Conectando ao portal da Prefeitura de Lauro de Freitas.</p>
+            <div class="form-control">
+                <label class="label py-1"><span class="label-text text-xs">Login</span></label>
+                <input type="text" id="nfseLogin" class="input input-bordered input-sm" placeholder="CNPJ/Inscrição">
+            </div>
+            <div class="form-control">
+                <label class="label py-1"><span class="label-text text-xs">Senha</span></label>
+                <input type="password" id="nfseSenha" class="input input-bordered input-sm">
+            </div>
+            <button id="btnSyncAuto" class="btn btn-warning btn-sm w-full gap-1.5">
+                <i data-lucide="bot" class="w-3.5 h-3.5"></i> Sincronizar Auto (OCR)
+            </button>
+            <button id="btnIniciarSync" class="btn btn-ghost btn-xs w-full opacity-60">
+                <i data-lucide="eye" class="w-3 h-3"></i> Modo manual
+            </button>
+        </div>
+
+        <div id="captchaStep2" class="hidden text-center py-8">
+            <span class="loading loading-spinner loading-lg text-warning"></span>
+            <p class="mt-3 text-sm" id="captchaLoadingMsg">Acessando portal...</p>
+            <p class="text-[0.65rem] opacity-40 mt-1" id="captchaLoadingDetail"></p>
+        </div>
+
+        <div id="captchaStep3" class="hidden space-y-3">
+            <p class="text-xs opacity-60">OCR falhou. Digite o texto da imagem:</p>
+            <div class="flex justify-center bg-base-200 rounded-lg p-3">
+                <img id="captchaImage" class="border border-base-300 rounded" alt="CAPTCHA" style="max-width:100%;image-rendering:pixelated;">
+            </div>
+            <input type="text" id="captchaInput" class="input input-bordered input-lg text-center tracking-widest font-bold text-xl w-full" placeholder="CAPTCHA" autocomplete="off">
+            <button id="btnEnviarCaptcha" class="btn btn-warning btn-sm w-full gap-1.5">
+                <i data-lucide="check" class="w-3.5 h-3.5"></i> Confirmar
+            </button>
+        </div>
+
+        <div id="captchaStep4" class="hidden py-4">
+            <div id="syncResultado" class="text-center"></div>
+            <button onclick="document.getElementById('captchaModal').close()" class="btn btn-primary btn-sm w-full mt-4">Fechar</button>
+        </div>
+
+        <div id="captchaErro" class="hidden mt-3">
+            <div class="alert alert-error text-xs py-2">
+                <i data-lucide="alert-circle" class="w-4 h-4"></i>
+                <span id="captchaErroMsg"></span>
+            </div>
+        </div>
+    </div>
+    <form method="dialog" class="modal-backdrop"><button>close</button></form>
+</dialog>
+
+<!-- ═══════════ NOTA CRUD MODAL ═══════════ -->
+<dialog id="notaModal" class="modal">
+    <div class="modal-box max-w-2xl">
+        <form method="dialog"><button class="btn btn-sm btn-circle btn-ghost absolute right-2 top-2">✕</button></form>
+        <h3 id="notaModalTitle" class="font-bold text-lg mb-4">Nova Nota Fiscal</h3>
+        <form id="notaForm" class="space-y-4">
+            <input type="hidden" id="notaId">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div class="form-control">
+                    <label class="label py-1"><span class="label-text text-xs">Número *</span></label>
+                    <input type="text" id="notaNumero" class="input input-bordered input-sm" required>
+                </div>
+                <div class="form-control">
+                    <label class="label py-1"><span class="label-text text-xs">CNPJ</span></label>
+                    <input type="text" id="notaCnpj" class="input input-bordered input-sm" placeholder="00.000.000/0000-00">
+                </div>
+                <div class="form-control md:col-span-2">
+                    <label class="label py-1"><span class="label-text text-xs">Razão Social</span></label>
+                    <input type="text" id="notaRazaoSocial" class="input input-bordered input-sm">
+                </div>
+                <div class="form-control">
+                    <label class="label py-1"><span class="label-text text-xs">Data Emissão *</span></label>
+                    <input type="date" id="notaDataEmissao" class="input input-bordered input-sm" required>
+                </div>
+                <div class="form-control">
+                    <label class="label py-1"><span class="label-text text-xs">Previsão Recebimento</span></label>
+                    <input type="date" id="notaPrevisao" class="input input-bordered input-sm">
+                </div>
+                <div class="form-control">
+                    <label class="label py-1"><span class="label-text text-xs">Valor Nota (R$) *</span></label>
+                    <input type="number" step="0.01" id="notaValorNota" class="input input-bordered input-sm" required>
+                </div>
+                <div class="form-control">
+                    <label class="label py-1"><span class="label-text text-xs">ISS (R$)</span></label>
+                    <input type="number" step="0.01" id="notaISS" class="input input-bordered input-sm" value="0">
+                </div>
+                <div class="form-control">
+                    <label class="label py-1"><span class="label-text text-xs">Valor Líquido</span></label>
+                    <input type="number" step="0.01" id="notaValorLiquido" class="input input-bordered input-sm" readonly>
+                </div>
+                <div class="form-control">
+                    <label class="label py-1"><span class="label-text text-xs">Estado</span></label>
+                    <input type="text" id="notaEstado" class="input input-bordered input-sm" maxlength="2" placeholder="BA">
+                </div>
+                <div class="form-control">
+                    <label class="label py-1"><span class="label-text text-xs">Cidade</span></label>
+                    <input type="text" id="notaCidade" class="input input-bordered input-sm">
+                </div>
+                <div class="form-control">
+                    <label class="label py-1"><span class="label-text text-xs">Status</span></label>
+                    <select id="notaRecebido" class="select select-bordered select-sm">
+                        <option value="Em aberto">Em aberto</option>
+                        <option value="Recebido">Recebido</option>
+                    </select>
+                </div>
+            </div>
+            <div id="camposPagamento" class="grid grid-cols-1 md:grid-cols-2 gap-3 hidden">
+                <div class="form-control">
+                    <label class="label py-1"><span class="label-text text-xs">Data Pagamento</span></label>
+                    <input type="date" id="notaDataPagamento" class="input input-bordered input-sm">
+                </div>
+                <div class="form-control">
+                    <label class="label py-1"><span class="label-text text-xs">Forma</span></label>
+                    <select id="notaFormaPagamento" class="select select-bordered select-sm">
+                        <option value="PIX">PIX</option>
+                        <option value="Boleto">Boleto</option>
+                        <option value="Transferência">Transferência</option>
+                        <option value="Depósito">Depósito</option>
+                        <option value="Outro">Outro</option>
+                    </select>
+                </div>
+                <div class="form-control">
+                    <label class="label py-1"><span class="label-text text-xs">Status Conciliado</span></label>
+                    <select id="notaStatusConciliado" class="select select-bordered select-sm">
+                        <option value="Pago no Prazo">Pago no Prazo</option>
+                        <option value="Pago com Atraso">Pago com Atraso</option>
+                        <option value="Pago Antecipado">Pago Antecipado</option>
+                    </select>
+                </div>
+            </div>
+            <div class="form-control">
+                <label class="label py-1"><span class="label-text text-xs">Observações</span></label>
+                <textarea id="notaObservacoes" class="textarea textarea-bordered text-sm" rows="2"></textarea>
+            </div>
+            <div class="modal-action">
+                <button type="button" id="btnDeletarNota" class="btn btn-error btn-sm btn-outline hidden">Excluir</button>
+                <div class="flex-1"></div>
+                <button type="button" onclick="document.getElementById('notaModal').close()" class="btn btn-sm">Cancelar</button>
+                <button type="submit" class="btn btn-primary btn-sm">Salvar</button>
+            </div>
+        </form>
+    </div>
+    <form method="dialog" class="modal-backdrop"><button>close</button></form>
+</dialog>
+
+<!-- ═══════════ KPI DETAIL MODAL ═══════════ -->
+<dialog id="kpiDetailModal" class="modal">
+    <div class="modal-box max-w-5xl w-full">
+        <form method="dialog"><button class="btn btn-sm btn-circle btn-ghost absolute right-2 top-2">✕</button></form>
+        <h3 id="modalTitle" class="font-bold text-lg mb-4 flex items-center gap-2">
+            <i id="modalIcon" data-lucide="info" class="w-5 h-5 text-primary"></i>
+            <span id="modalTitleText"></span>
+        </h3>
+        <div id="modalStats" class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-5"></div>
+        <div id="modalChartContainer" class="mb-5 hidden">
+            <div class="bg-base-200 rounded-lg p-4" style="height:280px"><canvas id="modalChart"></canvas></div>
+        </div>
+        <div id="modalTableContainer" class="mb-3">
+            <div class="flex justify-between items-center mb-2">
+                <h4 class="font-semibold text-sm">Detalhes</h4>
+                <div class="flex gap-1.5">
+                    <button id="exportCSV" class="btn btn-xs btn-ghost gap-1"><i data-lucide="download" class="w-3 h-3"></i> CSV</button>
+                    <button id="exportExcel" class="btn btn-xs btn-ghost gap-1"><i data-lucide="file-spreadsheet" class="w-3 h-3"></i> Excel</button>
+                </div>
+            </div>
+            <div class="overflow-x-auto max-h-80 border border-base-300/50 rounded-lg">
+                <table class="table table-sm table-pin-rows data-table">
+                    <thead><tr id="modalTableHeader"></tr></thead>
+                    <tbody id="modalTableBody"></tbody>
+                </table>
+            </div>
+            <div id="modalTableFooter" class="text-xs opacity-50 mt-1.5"></div>
+        </div>
+        <div class="modal-action"><form method="dialog"><button class="btn btn-sm">Fechar</button></form></div>
+    </div>
+    <form method="dialog" class="modal-backdrop"><button>close</button></form>
+</dialog>
+
+<!-- ═══════════ SYNC PAGAMENTOS MODAL ═══════════ -->
+<dialog id="syncPagamentosModal" class="modal">
+    <div class="modal-box max-w-lg">
+        <form method="dialog"><button class="btn btn-sm btn-circle btn-ghost absolute right-2 top-2">✕</button></form>
+        <h3 class="font-bold text-lg mb-3 flex items-center gap-2">
+            <i data-lucide="landmark" class="w-5 h-5 text-info"></i>
+            Pagamentos Finnet / Cimed
+        </h3>
+
+        <!-- Tabs -->
+        <div role="tablist" class="tabs tabs-boxed mb-4">
+            <button type="button" role="tab" class="tab tab-active" id="tabImportXLS" onclick="switchPgtoTab('xls')">
+                <i data-lucide="upload" class="w-3.5 h-3.5 mr-1"></i> Importar XLS
+            </button>
+            <button type="button" role="tab" class="tab" id="tabSyncAuto" onclick="switchPgtoTab('auto')">
+                <i data-lucide="refresh-cw" class="w-3.5 h-3.5 mr-1"></i> Sync Automático
+            </button>
+        </div>
+
+        <!-- ═══ TAB: Importar XLS ═══ -->
+        <div id="pgtoTabXLS">
+            <div id="xlsStep1" class="space-y-3">
+                <div class="alert alert-info text-xs py-2">
+                    <i data-lucide="info" class="w-4 h-4 shrink-0"></i>
+                    <div>
+                        <p class="font-medium">Como usar:</p>
+                        <ol class="list-decimal list-inside mt-1 space-y-0.5">
+                            <li>Acesse o <a href="https://painelfornecedor.com.br/Cimed?ctr=visaoFavorecido&mt=index" target="_blank" class="link link-info font-medium">Painel Fornecedor</a></li>
+                            <li>Clique em <strong>"Relatório XLS"</strong> para baixar</li>
+                            <li>Importe o arquivo aqui</li>
+                        </ol>
+                    </div>
+                </div>
+                <div class="form-control">
+                    <label class="label py-1"><span class="label-text text-xs font-medium">Arquivo XLS do portal Finnet</span></label>
+                    <input type="file" id="finnetXLSFile" accept=".xls,.xlsx" class="file-input file-input-bordered file-input-sm w-full">
+                </div>
+                <button id="btnImportarXLS" onclick="importarPagamentosXLS()" class="btn btn-info btn-sm w-full gap-1.5">
+                    <i data-lucide="file-spreadsheet" class="w-3.5 h-3.5"></i> Importar Pagamentos
+                </button>
+            </div>
+
+            <div id="xlsStep2" class="hidden text-center py-8">
+                <span class="loading loading-spinner loading-lg text-info"></span>
+                <p class="mt-3 text-sm">Processando planilha...</p>
+            </div>
+        </div>
+
+        <!-- ═══ TAB: Sync Automático ═══ -->
+        <div id="pgtoTabAuto" class="hidden">
+            <div id="syncPgtoStep1" class="space-y-3">
+                <div class="alert alert-warning text-xs py-2">
+                    <i data-lucide="alert-triangle" class="w-4 h-4 shrink-0"></i>
+                    <span>O portal Finnet pode bloquear acesso automatizado (WAF). Se falhar, use a aba "Importar XLS".</span>
+                </div>
+                <div class="form-control">
+                    <label class="label py-1"><span class="label-text text-xs">Email</span></label>
+                    <input type="email" id="finnetEmail" class="input input-bordered input-sm" placeholder="Email (ou configure no .env)">
+                </div>
+                <div class="form-control">
+                    <label class="label py-1"><span class="label-text text-xs">Senha</span></label>
+                    <input type="password" id="finnetSenha" class="input input-bordered input-sm" placeholder="Senha (ou configure no .env)">
+                </div>
+                <button id="btnIniciarSyncPgto" class="btn btn-info btn-sm w-full gap-1.5">
+                    <i data-lucide="landmark" class="w-3.5 h-3.5"></i> Sincronizar Pagamentos
+                </button>
+            </div>
+
+            <div id="syncPgtoStep2" class="hidden text-center py-8">
+                <span class="loading loading-spinner loading-lg text-info"></span>
+                <p class="mt-3 text-sm">Acessando Painel Fornecedor...</p>
+                <p class="text-[0.65rem] opacity-40 mt-1">Isso pode levar 30-60 segundos</p>
+            </div>
+        </div>
+
+        <!-- ═══ Resultado/Erro (compartilhado) ═══ -->
+        <div id="syncPgtoErro" class="hidden mt-3">
+            <div class="alert alert-error text-xs py-2">
+                <i data-lucide="alert-circle" class="w-4 h-4"></i>
+                <span id="syncPgtoErroMsg"></span>
+            </div>
+        </div>
+
+        <div id="syncPgtoStep3" class="hidden py-4">
+            <div id="syncPgtoResultado" class="text-center"></div>
+            <button onclick="document.getElementById('syncPagamentosModal').close()" class="btn btn-primary btn-sm w-full mt-4">Fechar</button>
+        </div>
+    </div>
+    <form method="dialog" class="modal-backdrop"><button>close</button></form>
+</dialog>
+
+<!-- ═══════════ CLIENTES / MAPEAMENTO MODAL ═══════════ -->
+<dialog id="clientesModal" class="modal">
+    <div class="modal-box max-w-4xl">
+        <h3 class="font-bold text-lg mb-4 flex items-center gap-2">
+            <i data-lucide="building-2" class="w-5 h-5 text-primary"></i> Cadastro de Clientes (Mapeamento)
+        </h3>
+        <p class="text-xs opacity-60 mb-3">Associe a razão social truncada do portal ao CNPJ e dados reais. Estes dados serão usados no Relatório de Cobrança.</p>
+        
+        <!-- Formulário de cadastro -->
+        <div class="bg-base-200 rounded-lg p-3 mb-4">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+                <div class="form-control">
+                    <label class="label py-0.5"><span class="label-text text-xs">Razão Social (como aparece no portal) *</span></label>
+                    <select id="mapRazaoCurta" class="select select-bordered select-sm">
+                        <option value="">Selecione ou digite...</option>
+                    </select>
+                </div>
+                <div class="form-control">
+                    <label class="label py-0.5"><span class="label-text text-xs">Razão Social Completa *</span></label>
+                    <input type="text" id="mapRazaoCompleta" class="input input-bordered input-sm" placeholder="Ex: CIMED & CO. S.A.">
+                </div>
+                <div class="form-control">
+                    <label class="label py-0.5"><span class="label-text text-xs">CNPJ *</span></label>
+                    <input type="text" id="mapCnpj" class="input input-bordered input-sm" placeholder="00.000.000/0000-00">
+                </div>
+                <div class="form-control">
+                    <label class="label py-0.5"><span class="label-text text-xs">Email</span></label>
+                    <input type="email" id="mapEmail" class="input input-bordered input-sm" placeholder="financeiro@empresa.com">
+                </div>
+                <div class="form-control">
+                    <label class="label py-0.5"><span class="label-text text-xs">Telefone</span></label>
+                    <input type="text" id="mapTelefone" class="input input-bordered input-sm" placeholder="(00) 0000-0000">
+                </div>
+                <div class="form-control">
+                    <label class="label py-0.5"><span class="label-text text-xs">Contato (responsável)</span></label>
+                    <input type="text" id="mapContato" class="input input-bordered input-sm" placeholder="Nome do responsável">
+                </div>
+                <div class="form-control md:col-span-2">
+                    <label class="label py-0.5"><span class="label-text text-xs">Endereço</span></label>
+                    <input type="text" id="mapEndereco" class="input input-bordered input-sm" placeholder="Endereço completo">
+                </div>
+                <div class="form-control">
+                    <label class="label py-0.5"><span class="label-text text-xs">Cidade</span></label>
+                    <input type="text" id="mapCidade" class="input input-bordered input-sm">
+                </div>
+                <div class="form-control">
+                    <label class="label py-0.5"><span class="label-text text-xs">UF</span></label>
+                    <input type="text" id="mapEstado" class="input input-bordered input-sm" maxlength="2" placeholder="BA">
+                </div>
+            </div>
+            <div class="flex gap-2 mt-3">
+                <button id="btnSalvarMapeamento" class="btn btn-primary btn-sm gap-1"><i data-lucide="save" class="w-3 h-3"></i> Salvar</button>
+                <button id="btnLimparFormMap" class="btn btn-ghost btn-sm">Limpar</button>
+            </div>
+        </div>
+        
+        <!-- Lista de mapeamentos existentes -->
+        <div class="overflow-x-auto max-h-60 border border-base-300/50 rounded-lg">
+            <table class="table table-sm table-pin-rows">
+                <thead>
+                    <tr>
+                        <th class="text-xs">Razão Social (portal)</th>
+                        <th class="text-xs">Razão Social Completa</th>
+                        <th class="text-xs">CNPJ</th>
+                        <th class="text-xs">Contato</th>
+                        <th class="text-xs w-16"></th>
+                    </tr>
+                </thead>
+                <tbody id="mapeamentoTableBody"></tbody>
+            </table>
+        </div>
+        
+        <div class="modal-action">
+            <button onclick="document.getElementById('clientesModal').close()" class="btn btn-sm">Fechar</button>
+        </div>
+    </div>
+    <form method="dialog" class="modal-backdrop"><button>close</button></form>
+</dialog>
+
+<!-- ═══════════ PAYMENT MODAL ═══════════ -->
+<dialog id="paymentModal" class="modal">
+    <div class="modal-box max-w-sm">
+        <form method="dialog"><button class="btn btn-sm btn-circle btn-ghost absolute right-2 top-2">✕</button></form>
+        <h3 class="font-bold text-lg mb-1 flex items-center gap-2">
+            <i data-lucide="circle-dollar-sign" class="w-5 h-5 text-success"></i>
+            Marcar como Pago
+        </h3>
+        <p id="paymentNotaInfo" class="text-xs opacity-50 mb-4"></p>
+        <input type="hidden" id="paymentNotaId">
+        <div class="space-y-3">
+            <div class="form-control">
+                <label class="label py-1"><span class="label-text text-xs">Data do Pagamento *</span></label>
+                <input type="date" id="paymentData" class="input input-bordered input-sm" required>
+            </div>
+            <div class="form-control">
+                <label class="label py-1"><span class="label-text text-xs">Forma de Pagamento</span></label>
+                <select id="paymentForma" class="select select-bordered select-sm w-full">
+                    <option value="PIX">PIX</option>
+                    <option value="Boleto">Boleto</option>
+                    <option value="Transferência">Transferência</option>
+                    <option value="Depósito">Depósito</option>
+                    <option value="Outro">Outro</option>
+                </select>
+            </div>
+            <div class="form-control">
+                <label class="label py-1"><span class="label-text text-xs">Observação (opcional)</span></label>
+                <input type="text" id="paymentObs" class="input input-bordered input-sm" placeholder="Ex: TED Banco do Brasil">
+            </div>
+        </div>
+        <div class="modal-action">
+            <button type="button" onclick="document.getElementById('paymentModal').close()" class="btn btn-sm">Cancelar</button>
+            <button type="button" id="btnConfirmarPagamento" class="btn btn-success btn-sm gap-1.5">
+                <i data-lucide="check" class="w-3.5 h-3.5"></i> Confirmar Pagamento
+            </button>
+        </div>
+    </div>
+    <form method="dialog" class="modal-backdrop"><button>close</button></form>
+</dialog>
+
+<!-- ═══════════ TOAST CONTAINER ═══════════ -->
+<div id="toastContainer" class="fixed top-4 right-4 z-[200] space-y-2"></div>
+
+<!-- ═══════════ JAVASCRIPT ═══════════ -->
+<script>lucide.createIcons();</script>
+
+<script>
+// ═══════════════════════════════════════════════
+// HELPERS
+// ═══════════════════════════════════════════════
+const fmt = {
+    currency: v => new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'}).format(v||0),
+    currencyShort: v => {
+        const abs = Math.abs(v||0);
+        if(abs >= 1e6) return 'R$ '+(v/1e6).toFixed(1).replace('.',',')+'M';
+        if(abs >= 1e3) return 'R$ '+(v/1e3).toFixed(1).replace('.',',')+'K';
+        return fmt.currency(v);
+    },
+    pct: v => (v||0).toFixed(1).replace('.',',')+' %',
+    num: v => new Intl.NumberFormat('pt-BR').format(Math.round(v||0)),
+    days: v => { const d=Math.round(v||0); return d+' '+(d===1?'dia':'dias'); },
+    date: v => { if(!v) return '—'; const d=new Date(v); return isNaN(d)?'—':d.toLocaleDateString('pt-BR'); },
+    monthLabel: m => { if(!m) return ''; const [y,mo]=m.split('-'); return new Date(y,mo-1).toLocaleDateString('pt-BR',{month:'short',year:'2-digit'}); }
+};
+
+function toast(msg, type='info') {
+    const c = document.getElementById('toastContainer');
+    const el = document.createElement('div');
+    el.className = `alert alert-${type} shadow-lg text-sm py-2 px-4 fade-in max-w-xs`;
+    el.innerHTML = `<span>${msg}</span>`;
+    c.appendChild(el);
+    setTimeout(()=>el.remove(), 4500);
+}
+
+// ═══════════════════════════════════════════════
+// DATA SERVICE
+// ═══════════════════════════════════════════════
+class DataService {
+    processAPIData(apiData) {
+        return apiData.map((row, i) => {
+            const r = {...row};
+            r.dataEmissao = this.parseDate(r.dataEmissao);
+            r.dataPagamento = this.parseDate(r.dataPagamento);
+            r.previsaoRecebimento = this.parseDate(r.previsaoRecebimento);
+            r.valorNota = parseFloat(r.valorNota)||0;
+            r.iss = parseFloat(r.iss)||0;
+            r.valorLiquido = parseFloat(r.valorLiquido)||0;
+            r.diasPagamento = parseFloat(r.diasPagamento)||0;
+            r.diasEmAberto = r.recebido==='Recebido'?0:this.daysOpen(r.dataEmissao);
+            r.agingBucket = this.agingBucket(r.diasEmAberto);
+            r.mesEmissao = r.dataEmissao ? r.dataEmissao.getFullYear()+'-'+String(r.dataEmissao.getMonth()+1).padStart(2,'0') : '';
+            r.estado = (r.estado||'').trim();
+            r.cnpj = (r.cnpj||'').trim();
+            r.statusConciliado = (r.statusConciliado||'').trim();
+            r.recebido = (r.recebido||'').trim();
+            r.statusPagamento = (r.statusPagamento||'').trim();
+            r.razaoSocial = (r.razaoSocial||'').trim();
+            r.rowIndex = i;
+            return r;
+        });
+    }
+    parseDate(v) {
+        if(!v) return null;
+        if(v instanceof Date) return v;
+        if(typeof v==='number') return new Date((v-25569)*86400000);
+        const d=new Date(v); return isNaN(d.getTime())?null:d;
+    }
+    daysOpen(d) {
+        if(!d) return 0;
+        const now=new Date(); now.setHours(0,0,0,0);
+        const e=new Date(d); e.setHours(0,0,0,0);
+        return Math.max(0,Math.floor((now-e)/864e5));
+    }
+    agingBucket(d) { return d<=30?'0-30':d<=60?'31-60':d<=90?'61-90':'90+'; }
+}
+window.DataService = new DataService();
+
+// ═══════════════════════════════════════════════
+// FILTERS MANAGER
+// ═══════════════════════════════════════════════
+class FiltersManager {
+    constructor() { this.data=null; this.filters={dateStart:null,dateEnd:null,estado:'',cnpj:'',status:[]}; this.timeout=null; }
+
+    init(data) {
+        this.data = data;
+        this.populateUF(data);
+        this.populateCNPJ(data);
+        this.populateStatus(data);
+        this.loadSaved();
+        this.listen();
+    }
+    populateUF(data) {
+        const el=document.getElementById('ufFilter'); if(!el) return;
+        const ufs=[...new Set(data.map(r=>r.estado).filter(Boolean))].sort();
+        el.innerHTML='<option value="">Todos</option>'+ufs.map(u=>`<option value="${u}">${u}</option>`).join('');
+    }
+    populateCNPJ(data) {
+        const el=document.getElementById('cnpjFilter'); if(!el) return;
+        const map=new Map(); data.forEach(r=>{const key=r.cnpj||r.razaoSocial; if(key&&r.razaoSocial) map.set(key,r.razaoSocial);});
+        const sorted=[...map.entries()].sort((a,b)=>a[1].localeCompare(b[1]));
+        el.innerHTML='<option value="">Todos</option>'+sorted.map(([c,n])=>`<option value="${c}">${n.substring(0,30)}</option>`).join('');
+    }
+    populateStatus(data) {
+        const el=document.getElementById('statusFilters'); if(!el) return;
+        const vals=[...new Set(data.map(r=>r.statusConciliado).filter(Boolean))].sort();
+        el.innerHTML=vals.map(s=>`<label class="flex items-center gap-2 cursor-pointer py-0.5"><input type="checkbox" class="checkbox checkbox-xs" value="${s}"><span class="text-xs">${s}</span></label>`).join('');
+    }
+    listen() {
+        document.getElementById('ufFilter')?.addEventListener('change',e=>{this.filters.estado=e.target.value;this.auto();});
+        document.getElementById('cnpjFilter')?.addEventListener('change',e=>{this.filters.cnpj=e.target.value;this.auto();});
+        document.getElementById('statusFilters')?.addEventListener('change',e=>{if(e.target.type==='checkbox'){this.filters.status=[...document.querySelectorAll('#statusFilters input:checked')].map(c=>c.value);this.auto();}});
+    }
+    updateDate(type,date){this.filters[type==='start'?'dateStart':'dateEnd']=date;this.auto();}
+    auto(){clearTimeout(this.timeout);this.timeout=setTimeout(()=>this.apply(),200);}
+    apply() {
+        if(!this.data) return;
+        let d=[...this.data];
+        if(this.filters.dateStart) d=d.filter(r=>r.dataEmissao&&r.dataEmissao>=this.filters.dateStart);
+        if(this.filters.dateEnd) d=d.filter(r=>r.dataEmissao&&r.dataEmissao<=this.filters.dateEnd);
+        if(this.filters.estado) d=d.filter(r=>r.estado===this.filters.estado);
+        if(this.filters.cnpj) d=d.filter(r=>(r.cnpj||r.razaoSocial)===this.filters.cnpj);
+        if(this.filters.status.length) d=d.filter(r=>this.filters.status.includes(r.statusConciliado));
+        this.save();
+        window.App?.updateFiltered(d);
+    }
+    clear() {
+        this.filters={dateStart:null,dateEnd:null,estado:'',cnpj:'',status:[]};
+        document.getElementById('ufFilter').value='';
+        document.getElementById('cnpjFilter').value='';
+        document.querySelectorAll('#statusFilters input').forEach(c=>c.checked=false);
+        const sd=document.getElementById('startDate'); if(sd._flatpickr) sd._flatpickr.clear();
+        const ed=document.getElementById('endDate'); if(ed._flatpickr) ed._flatpickr.clear();
+        localStorage.removeItem('avant-filters');
+        this.apply();
+    }
+    save(){try{localStorage.setItem('avant-filters',JSON.stringify({...this.filters,dateStart:this.filters.dateStart?.toISOString(),dateEnd:this.filters.dateEnd?.toISOString()}));}catch(e){}}
+    loadSaved(){
+        try{
+            const s=localStorage.getItem('avant-filters'); if(!s) return;
+            const f=JSON.parse(s);
+            if(f.dateStart){this.filters.dateStart=new Date(f.dateStart);document.getElementById('startDate')?._flatpickr?.setDate(this.filters.dateStart);}
+            if(f.dateEnd){this.filters.dateEnd=new Date(f.dateEnd);document.getElementById('endDate')?._flatpickr?.setDate(this.filters.dateEnd);}
+            if(f.estado){this.filters.estado=f.estado;document.getElementById('ufFilter').value=f.estado;}
+            if(f.cnpj){this.filters.cnpj=f.cnpj;document.getElementById('cnpjFilter').value=f.cnpj;}
+            if(f.status?.length){this.filters.status=f.status;document.querySelectorAll('#statusFilters input').forEach(c=>c.checked=f.status.includes(c.value));}
+        }catch(e){localStorage.removeItem('avant-filters');}
+    }
+}
+window.FiltersManager = new FiltersManager();
+
+// ═══════════════════════════════════════════════
+// CHARTS MANAGER
+// ═══════════════════════════════════════════════
+class ChartsManager {
+    constructor() {
+        this.charts = {};
+        Chart.defaults.font.family = 'Inter, system-ui, sans-serif';
+        Chart.defaults.font.size = 11;
+        Chart.register(ChartDataLabels);
+        this.colors = {
+            green:  '#22c55e', blue: '#3b82f6', amber: '#f59e0b', red: '#ef4444',
+            purple: '#8b5cf6', cyan: '#06b6d4', emerald: '#10b981', rose: '#f43f5e',
+            greenBg: 'rgba(34,197,94,0.15)', blueBg: 'rgba(59,130,246,0.15)',
+            amberBg: 'rgba(245,158,11,0.15)', redBg: 'rgba(239,68,68,0.15)'
+        };
+    }
+    init(data, analytics) { this.make(data, analytics); }
+    update(data, analytics) {
+        Object.values(this.charts).forEach(c=>c?.destroy());
+        this.charts={};
+        this.make(data, analytics);
+    }
+    make(data, analytics) {
+        this.makeRevenueTrend(analytics);
+        this.makeStatus(data);
+        this.makeRecebido(analytics);
+        this.makeAging(data);
+        this.makeDSO(analytics);
+        this.makeTopClientes(analytics);
+    }
+    opt(extra){return{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},datalabels:{display:false}},...extra};}
+
+    makeRevenueTrend(a) {
+        const ctx=document.getElementById('revenueTrendChart'); if(!ctx) return;
+        const fm = a?.faturamentoMensal || [];
+        const last12 = fm.slice(-12);
+        this.charts.revenue = new Chart(ctx, {
+            type:'bar',
+            data:{
+                labels: last12.map(m=>fmt.monthLabel(m.mes)),
+                datasets:[
+                    {label:'Bruto',data:last12.map(m=>m.bruto),backgroundColor:this.colors.blueBg,borderColor:this.colors.blue,borderWidth:1.5,borderRadius:6,order:2},
+                    {label:'Líquido',data:last12.map(m=>m.liquido),backgroundColor:this.colors.greenBg,borderColor:this.colors.green,borderWidth:1.5,borderRadius:6,order:2},
+                    {label:'ISS',type:'line',data:last12.map(m=>m.iss),borderColor:this.colors.rose,backgroundColor:'transparent',borderWidth:2,pointRadius:3,pointBackgroundColor:this.colors.rose,tension:0.4,order:1,yAxisID:'y1'}
+                ]
+            },
+            options:this.opt({
+                plugins:{legend:{display:true,position:'top',labels:{boxWidth:10,font:{size:10}}},datalabels:{display:false}},
+                scales:{
+                    y:{beginAtZero:true,ticks:{callback:v=>fmt.currencyShort(v),font:{size:10}},grid:{color:'rgba(128,128,128,0.06)'}},
+                    y1:{position:'right',beginAtZero:true,ticks:{callback:v=>fmt.currencyShort(v),font:{size:10}},grid:{display:false}},
+                    x:{grid:{display:false},ticks:{font:{size:10}}}
+                }
+            })
+        });
+    }
+
+    makeStatus(data) {
+        const ctx=document.getElementById('statusChart'); if(!ctx) return;
+        const counts={}; data.forEach(r=>{const s=r.statusConciliado||'Sem status';counts[s]=(counts[s]||0)+1;});
+        const colorMap={'Pago':this.colors.green,'Pago no Prazo':this.colors.green,'Pago com Atraso':this.colors.amber,'Pago Antecipado':this.colors.blue,'Não Pago':this.colors.red,'Cancelada':this.colors.purple,'Serviço Contratado':this.colors.cyan,'N/A':'#6b7280'};
+        this.charts.status = new Chart(ctx, {
+            type:'doughnut',
+            data:{
+                labels:Object.keys(counts),
+                datasets:[{data:Object.values(counts),backgroundColor:Object.keys(counts).map(k=>colorMap[k]||'#6b7280'),borderWidth:0,hoverOffset:8}]
+            },
+            options:this.opt({
+                cutout:'65%',
+                plugins:{
+                    legend:{display:true,position:'bottom',labels:{padding:12,usePointStyle:true,pointStyle:'circle',font:{size:10}}},
+                    datalabels:{color:'#fff',font:{weight:'bold',size:11},formatter:(v,ctx)=>{const t=ctx.dataset.data.reduce((a,b)=>a+b,0);return((v/t)*100).toFixed(0)+'%';},display:ctx=>ctx.dataset.data[ctx.dataIndex]>0}
+                }
+            })
+        });
+    }
+
+    makeRecebido(a) {
+        const ctx=document.getElementById('recebidoChart'); if(!ctx) return;
+        const rm = a?.recebimentosMensais || [];
+        const last12 = rm.slice(-12);
+        this.charts.recebido = new Chart(ctx, {
+            type:'bar',
+            data:{
+                labels:last12.map(m=>fmt.monthLabel(m.mes)),
+                datasets:[
+                    {label:'Recebido',data:last12.map(m=>m.recebido),backgroundColor:this.colors.green,borderRadius:4},
+                    {label:'Em Aberto',data:last12.map(m=>m.em_aberto),backgroundColor:this.colors.amber,borderRadius:4}
+                ]
+            },
+            options:this.opt({
+                plugins:{legend:{display:true,position:'top',labels:{boxWidth:10,font:{size:10}}},datalabels:{display:false}},
+                scales:{y:{beginAtZero:true,ticks:{callback:v=>fmt.currencyShort(v),font:{size:10}},grid:{color:'rgba(128,128,128,0.06)'}},x:{grid:{display:false},ticks:{font:{size:10}}}}
+            })
+        });
+    }
+
+    makeAging(data) {
+        const ctx=document.getElementById('agingChart'); if(!ctx) return;
+        const buckets={'0-30':0,'31-60':0,'61-90':0,'90+':0};
+        data.filter(r=>r.recebido==='Em aberto').forEach(r=>buckets[r.agingBucket]=(buckets[r.agingBucket]||0)+(r.valorLiquido||0));
+        const colors=[this.colors.green,this.colors.amber,this.colors.red,'#991b1b'];
+        this.charts.aging = new Chart(ctx, {
+            type:'bar',
+            data:{labels:Object.keys(buckets),datasets:[{data:Object.values(buckets),backgroundColor:colors.map(c=>c+'33'),borderColor:colors,borderWidth:1.5,borderRadius:6}]},
+            options:this.opt({
+                plugins:{datalabels:{anchor:'end',align:'top',font:{weight:'bold',size:10},formatter:v=>fmt.currencyShort(v),color:colors}},
+                scales:{y:{beginAtZero:true,ticks:{callback:v=>fmt.currencyShort(v),font:{size:10}},grid:{color:'rgba(128,128,128,0.06)'}},x:{grid:{display:false},ticks:{font:{size:10}}}}
+            })
+        });
+    }
+
+    makeDSO(a) {
+        const ctx=document.getElementById('dsoChart'); if(!ctx) return;
+        const dm = (a?.dsoMensal || []).filter(m=>m.dso_medio!=null);
+        if(!dm.length){ ctx.parentElement.innerHTML='<div class="flex items-center justify-center h-full text-sm opacity-40">Sem dados de DSO (registre datas de pagamento)</div>'; return; }
+        this.charts.dso = new Chart(ctx, {
+            type:'line',
+            data:{
+                labels:dm.map(m=>fmt.monthLabel(m.mes)),
+                datasets:[{
+                    label:'DSO',data:dm.map(m=>m.dso_medio),
+                    borderColor:this.colors.blue,backgroundColor:this.colors.blueBg,
+                    borderWidth:2.5,fill:true,tension:0.4,
+                    pointBackgroundColor:this.colors.blue,pointBorderColor:'#fff',pointBorderWidth:2,pointRadius:4
+                }]
+            },
+            options:this.opt({
+                plugins:{datalabels:{backgroundColor:this.colors.blue,borderRadius:4,color:'#fff',font:{weight:'bold',size:9},padding:3,formatter:v=>Math.round(v)+'d'}},
+                scales:{y:{beginAtZero:true,title:{display:true,text:'Dias',font:{size:10}},grid:{color:'rgba(128,128,128,0.06)'}},x:{grid:{display:false},ticks:{font:{size:10}}}}
+            })
+        });
+    }
+
+    makeTopClientes(a) {
+        const ctx=document.getElementById('topClientesChart'); if(!ctx) return;
+        const tc = (a?.topClientes || []).slice(0,8);
+        this.charts.topClientes = new Chart(ctx, {
+            type:'bar',
+            data:{
+                labels:tc.map(c=>(c.razao_social||'').substring(0,20)),
+                datasets:[{data:tc.map(c=>c.total_liquido),backgroundColor:this.colors.emerald+'33',borderColor:this.colors.emerald,borderWidth:1.5,borderRadius:6}]
+            },
+            options:this.opt({
+                indexAxis:'y',
+                plugins:{datalabels:{anchor:'end',align:'right',font:{size:9,weight:'bold'},color:this.colors.emerald,formatter:v=>fmt.currencyShort(v)}},
+                scales:{x:{beginAtZero:true,ticks:{callback:v=>fmt.currencyShort(v),font:{size:10}},grid:{color:'rgba(128,128,128,0.06)'}},y:{ticks:{font:{size:9}},grid:{display:false}}}
+            })
+        });
+    }
+}
+window.ChartsManager = new ChartsManager();
+
+// ═══════════════════════════════════════════════
+// KPI CARDS
+// ═══════════════════════════════════════════════
+class KPICards {
+    constructor() {
+        this.data = null;
+        this.defs = [
+            {id:'ticket-medio-bruto',title:'Ticket Médio Bruto',icon:'calculator',fmt:'currency',calc:d=>{const t=d.reduce((s,r)=>s+r.valorNota,0);return d.length?t/d.length:0;}},
+            {id:'ticket-medio-liquido',title:'Ticket Médio Líquido',icon:'calculator',fmt:'currency',calc:d=>{const t=d.reduce((s,r)=>s+r.valorLiquido,0);return d.length?t/d.length:0;}},
+            {id:'top5-cnpjs',title:'Top 5 CNPJs (% Receita)',icon:'award',fmt:'pct',calc:d=>{const m={};const t=d.reduce((s,r)=>s+r.valorLiquido,0);d.forEach(r=>{m[r.cnpj||'-']=(m[r.cnpj||'-']||0)+r.valorLiquido;});const top5=Object.values(m).sort((a,b)=>b-a).slice(0,5).reduce((s,v)=>s+v,0);return t?top5/t*100:0;}},
+            {id:'notas-prazo',title:'% Pagas',icon:'check',fmt:'pct',calc:d=>{return d.length?d.filter(r=>r.statusConciliado==='Pago'||r.statusConciliado==='Pago no Prazo').length/d.length*100:0;}},
+            {id:'notas-atraso',title:'% Pagas com Atraso',icon:'alert-triangle',fmt:'pct',calc:d=>{return d.length?d.filter(r=>r.statusConciliado==='Pago com Atraso').length/d.length*100:0;}},
+            {id:'notas-antecipadas',title:'% Antecipadas',icon:'zap',fmt:'pct',calc:d=>{return d.length?d.filter(r=>r.statusConciliado==='Pago Antecipado').length/d.length*100:0;}},
+            {id:'valor-antecipado',title:'Valor Antecipado',icon:'fast-forward',fmt:'currency',calc:d=>d.filter(r=>r.statusConciliado==='Pago Antecipado').reduce((s,r)=>s+r.valorLiquido,0)},
+            {id:'atraso-medio',title:'Atraso Médio',icon:'clock',fmt:'days',calc:d=>{const a=d.filter(r=>r.statusConciliado==='Pago com Atraso'&&r.diasPagamento>0);return a.length?a.reduce((s,r)=>s+r.diasPagamento,0)/a.length:0;}},
+            {id:'previsao-30d',title:'Previsão ≤ 30d',icon:'calendar-days',fmt:'currency',calc:d=>{const lim=new Date(Date.now()+30*864e5);return d.filter(r=>r.recebido==='Em aberto'&&r.previsaoRecebimento&&r.previsaoRecebimento<=lim).reduce((s,r)=>s+r.valorLiquido,0);}},
+            {id:'aging-0-30',title:'Aging 0–30',icon:'circle',fmt:'currency',calc:d=>d.filter(r=>r.recebido==='Em aberto'&&r.agingBucket==='0-30').reduce((s,r)=>s+r.valorLiquido,0)},
+            {id:'aging-31-60',title:'Aging 31–60',icon:'circle',fmt:'currency',calc:d=>d.filter(r=>r.recebido==='Em aberto'&&r.agingBucket==='31-60').reduce((s,r)=>s+r.valorLiquido,0)},
+            {id:'aging-61-90',title:'Aging 61–90',icon:'circle',fmt:'currency',calc:d=>d.filter(r=>r.recebido==='Em aberto'&&r.agingBucket==='61-90').reduce((s,r)=>s+r.valorLiquido,0)},
+            {id:'aging-90-plus',title:'Aging 90+',icon:'alert-circle',fmt:'currency',calc:d=>d.filter(r=>r.recebido==='Em aberto'&&r.agingBucket==='90+').reduce((s,r)=>s+r.valorLiquido,0)},
+            {id:'notas-90-plus',title:'Notas >90d (#)',icon:'alert-triangle',fmt:'num',calc:d=>d.filter(r=>r.recebido==='Em aberto'&&r.diasEmAberto>90).length},
+            {id:'maior-atraso',title:'Maior Atraso',icon:'alert-octagon',fmt:'days',calc:d=>{const v=d.filter(r=>r.recebido==='Em aberto').map(r=>r.diasEmAberto);return v.length?Math.max(...v):0;}},
+            {id:'iss-total',title:'ISS Retido Total',icon:'receipt',fmt:'currency',calc:d=>d.reduce((s,r)=>s+r.iss,0)},
+            {id:'iss-percentual',title:'ISS % sobre Bruto',icon:'percent',fmt:'pct',calc:d=>{const b=d.reduce((s,r)=>s+r.valorNota,0);const i=d.reduce((s,r)=>s+r.iss,0);return b?i/b*100:0;}},
+            {id:'sem-status',title:'Sem Status Pgto',icon:'help-circle',fmt:'num',calc:d=>d.filter(r=>!r.statusPagamento).length}
+        ];
+    }
+    update(data) {
+        this.data = data;
+        const grid = document.getElementById('kpiGrid');
+        if(!grid) return;
+        grid.innerHTML = this.defs.map(kpi=>{
+            const v = kpi.calc(data);
+            const fv = this.fmtVal(v, kpi.fmt);
+            const color = this.color(kpi.id, v);
+            return `<div class="kpi-card ${color} cursor-pointer" onclick="window.KPICards.showKPIDetails('${kpi.id}')">
+                <div class="flex items-center gap-2 mb-1.5">
+                    <div class="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center"><i data-lucide="${kpi.icon}" class="w-3.5 h-3.5 text-primary"></i></div>
+                    <span class="text-[0.65rem] font-medium opacity-50">${kpi.title}</span>
+                </div>
+                <div class="text-lg font-bold">${fv}</div>
+            </div>`;
+        }).join('');
+        lucide.createIcons();
+    }
+    fmtVal(v,f){return f==='currency'?fmt.currency(v):f==='pct'?fmt.pct(v):f==='days'?fmt.days(v):fmt.num(v);}
+    color(id,v){
+        if(id.includes('atraso')||id.includes('90')) return v>0?'border-l-4 border-l-error':'border-l-4 border-l-success';
+        if(id.includes('recebido')||id.includes('prazo')||id.includes('antecip')) return 'border-l-4 border-l-success';
+        if(id.includes('aberto')||id.includes('sem-status')) return v>0?'border-l-4 border-l-warning':'border-l-4 border-l-success';
+        return 'border-l-4 border-l-primary';
+    }
+
+    showKPIDetails(kpiId) {
+        const data = this.data || window.App?.filteredData || [];
+        let records=[], stats={}, columns=[], chartData=null;
+        const defaultCols = ['numero','razaoSocial','dataEmissao','valorNota','valorLiquido','statusConciliado','recebido'];
+
+        switch(kpiId) {
+            case 'faturamento-bruto':
+            case 'faturamento-liquido':
+                records=data; columns=defaultCols;
+                stats={'Total Notas':fmt.num(data.length),'Bruto':fmt.currency(data.reduce((s,r)=>s+r.valorNota,0)),'Líquido':fmt.currency(data.reduce((s,r)=>s+r.valorLiquido,0))};
+                break;
+            case 'valor-recebido':
+                records=data.filter(r=>r.recebido==='Recebido'); columns=['numero','razaoSocial','dataEmissao','dataPagamento','valorLiquido','diasPagamento'];
+                stats={'Notas':fmt.num(records.length),'Total':fmt.currency(records.reduce((s,r)=>s+r.valorLiquido,0)),'DSO Médio':fmt.days(records.length?records.reduce((s,r)=>s+r.diasPagamento,0)/records.length:0)};
+                break;
+            case 'valor-em-aberto':
+                records=data.filter(r=>r.recebido==='Em aberto'); columns=['numero','razaoSocial','dataEmissao','valorLiquido','diasEmAberto','agingBucket'];
+                stats={'Notas':fmt.num(records.length),'Total':fmt.currency(records.reduce((s,r)=>s+r.valorLiquido,0)),'Dias Médio':fmt.days(records.length?records.reduce((s,r)=>s+r.diasEmAberto,0)/records.length:0)};
+                break;
+            case 'numero-notas':
+                records=data; columns=defaultCols;
+                stats={'Total':fmt.num(data.length),'Bruto':fmt.currency(data.reduce((s,r)=>s+r.valorNota,0)),'Líquido':fmt.currency(data.reduce((s,r)=>s+r.valorLiquido,0))};
+                break;
+            default:
+                records=data; columns=defaultCols;
+                const def=this.defs.find(d=>d.id===kpiId);
+                stats={'Valor':def?this.fmtVal(def.calc(data),def.fmt):'—','Notas':fmt.num(data.length)};
+        }
+
+        // Render modal
+        document.getElementById('modalTitleText').textContent = this.defs.find(d=>d.id===kpiId)?.title || kpiId;
+        const statsEl=document.getElementById('modalStats');
+        statsEl.innerHTML=Object.entries(stats).map(([k,v])=>`<div class="stat-mini"><div><div class="text-xs opacity-50">${k}</div><div class="text-base font-bold">${v}</div></div></div>`).join('');
+
+        document.getElementById('modalChartContainer').classList.add('hidden');
+
+        // Table
+        const colLabels={'numero':'Nº NF','razaoSocial':'Razão Social','dataEmissao':'Emissão','dataPagamento':'Pagamento','valorNota':'V. Bruto','valorLiquido':'V. Líquido','statusConciliado':'Status','recebido':'Recebido','diasPagamento':'Dias Pgto','diasEmAberto':'Dias Aberto','agingBucket':'Aging','estado':'UF'};
+        document.getElementById('modalTableHeader').innerHTML=columns.map(c=>`<th>${colLabels[c]||c}</th>`).join('');
+        const display=records.slice(0,100);
+        document.getElementById('modalTableBody').innerHTML=display.map(r=>`<tr>${columns.map(c=>{
+            const v=r[c]; if(c.startsWith('valor')||c==='iss') return `<td class="text-right">${fmt.currency(v)}</td>`;
+            if(c.includes('data')||c.includes('Data')) return `<td>${fmt.date(v)}</td>`;
+            if(c==='statusConciliado') return `<td>${this.statusBadge(v)}</td>`;
+            if(c==='recebido') return `<td>${this.recebidoBadge(v)}</td>`;
+            return `<td>${v??'—'}</td>`;
+        }).join('')}</tr>`).join('');
+        document.getElementById('modalTableFooter').textContent=`Mostrando ${display.length} de ${records.length}`;
+
+        // Export buttons
+        this.setupExport(records, columns, colLabels);
+        lucide.createIcons();
+        document.getElementById('kpiDetailModal').showModal();
+    }
+    statusBadge(s){
+        const map={'Pago':'bg-success/20 text-success','Pago no Prazo':'bg-success/20 text-success','Pago com Atraso':'bg-warning/20 text-warning','Pago Antecipado':'bg-info/20 text-info','Não Pago':'bg-error/20 text-error','Cancelada':'bg-base-300 text-base-content/50','Serviço Contratado':'bg-info/20 text-info'};
+        return `<span class="badge-status ${map[s]||'bg-base-300 text-base-content/50'}">${s||'—'}</span>`;
+    }
+    recebidoBadge(s){
+        return s==='Recebido'?'<span class="badge-status bg-success/20 text-success">Recebido</span>':'<span class="badge-status bg-warning/20 text-warning">Em aberto</span>';
+    }
+    setupExport(records, columns, labels) {
+        document.getElementById('exportCSV').onclick=()=>{
+            const header=columns.map(c=>labels[c]||c);
+            const rows=records.map(r=>columns.map(c=>{const v=r[c];if(v instanceof Date) return fmt.date(v);return v??'';}));
+            const csv=[header,...rows].map(r=>r.map(c=>`"${c}"`).join(',')).join('\n');
+            const blob=new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8;'});
+            const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='export.csv';a.click();
+        };
+        document.getElementById('exportExcel').onclick=()=>{
+            const wb=XLSX.utils.book_new();
+            const header=columns.map(c=>labels[c]||c);
+            const rows=records.map(r=>columns.map(c=>{const v=r[c];if(v instanceof Date) return fmt.date(v);return v??'';}));
+            const ws=XLSX.utils.aoa_to_sheet([header,...rows]);
+            XLSX.utils.book_append_sheet(wb,ws,'Dados');
+            XLSX.writeFile(wb,'export.xlsx');
+        };
+    }
+}
+window.KPICards = new KPICards();
+
+// ═══════════════════════════════════════════════
+// TABLE MANAGER
+// ═══════════════════════════════════════════════
+class TableManager {
+    constructor() { this.data=[]; this.sorted=[]; this.page=0; this.perPage=50; this.sortKey='dataEmissao'; this.sortDir=-1; this.search=''; }
+    init() {
+        document.querySelectorAll('.data-table th[data-sort]').forEach(th=>{
+            th.addEventListener('click',()=>{
+                const k=th.dataset.sort;
+                if(this.sortKey===k) this.sortDir*=-1; else { this.sortKey=k; this.sortDir=-1; }
+                this.render();
+            });
+        });
+        document.getElementById('tableSearch')?.addEventListener('input',e=>{this.search=e.target.value.toLowerCase();this.page=0;this.render();});
+        document.getElementById('tablePrev')?.addEventListener('click',()=>{if(this.page>0){this.page--;this.render();}});
+        document.getElementById('tableNext')?.addEventListener('click',()=>{const max=Math.ceil(this.filtered().length/this.perPage)-1;if(this.page<max){this.page++;this.render();}});
+        document.getElementById('exportTableCSV')?.addEventListener('click',()=>this.exportCSV());
+        document.getElementById('btnRelatorioCobranca')?.addEventListener('click',()=>this.gerarRelatorioCobranca());
+    }
+    update(data) { this.data=data; this.page=0; this.render(); }
+    filtered() {
+        if(!this.search) return this.data;
+        return this.data.filter(r=>(r.numero||'').toLowerCase().includes(this.search)||(r.razaoSocial||'').toLowerCase().includes(this.search)||(r.cnpj||'').toLowerCase().includes(this.search));
+    }
+    render() {
+        let d=this.filtered();
+        d.sort((a,b)=>{
+            let va=a[this.sortKey],vb=b[this.sortKey];
+            if(va instanceof Date&&vb instanceof Date) return (va-vb)*this.sortDir;
+            if(typeof va==='number'&&typeof vb==='number') return (va-vb)*this.sortDir;
+            return String(va||'').localeCompare(String(vb||''))*this.sortDir;
+        });
+        const start=this.page*this.perPage;
+        const page=d.slice(start,start+this.perPage);
+        const body=document.getElementById('tableBody');
+        body.innerHTML=page.map(r=>`<tr>
+            <td class="font-medium">${r.numero||'—'}</td>
+            <td class="max-w-[200px] truncate" title="${r.razaoSocial||''}">${r.razaoSocial||'—'}</td>
+            <td>${fmt.date(r.dataEmissao)}</td>
+            <td class="text-right font-medium">${fmt.currency(r.valorNota)}</td>
+            <td class="text-right font-medium">${fmt.currency(r.valorLiquido)}</td>
+            <td>${window.KPICards.statusBadge(r.statusConciliado)}</td>
+            <td>${window.KPICards.recebidoBadge(r.recebido)}</td>
+            <td class="flex gap-1">${r.recebido!=='Recebido'&&r.recebido!=='Cancelada'&&r.recebido!=='N/A'?`<button class="btn btn-success btn-xs gap-0.5" onclick="window.App.openPaymentModal(${r.id})" title="Marcar como Pago"><i data-lucide="circle-dollar-sign" class="w-3 h-3"></i><span class="hide-mobile">Pagar</span></button>`:''}<button class="btn btn-ghost btn-xs" onclick="window.App.editNota(${r.id})" title="Editar"><i data-lucide="pencil" class="w-3 h-3"></i></button></td>
+        </tr>`).join('');
+        lucide.createIcons();
+        document.getElementById('tableInfo').textContent=`${start+1}–${Math.min(start+this.perPage,d.length)} de ${d.length} notas`;
+        document.getElementById('tablePage').textContent=`${this.page+1}/${Math.max(1,Math.ceil(d.length/this.perPage))}`;
+        document.getElementById('tablePrev').disabled=this.page===0;
+        document.getElementById('tableNext').disabled=start+this.perPage>=d.length;
+    }
+    exportCSV() {
+        const d=this.filtered();
+        const cols=['numero','razaoSocial','cnpj','dataEmissao','valorNota','iss','valorLiquido','estado','statusConciliado','recebido'];
+        const header=['Número','Razão Social','CNPJ','Emissão','Valor Nota','ISS','Valor Líquido','UF','Status','Recebido'];
+        const rows=d.map(r=>cols.map(c=>{const v=r[c];if(v instanceof Date)return fmt.date(v);return v??'';}));
+        const csv=[header,...rows].map(r=>r.map(c=>`"${c}"`).join(',')).join('\n');
+        const blob=new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8;'});
+        const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='notas_fiscais.csv';a.click();
+    }
+
+    async gerarRelatorioCobranca() {
+        // Filtrar apenas não pagos
+        const naoPagos = this.data.filter(r => r.recebido !== 'Recebido' && r.statusConciliado !== 'Cancelada' && r.statusConciliado !== 'Serviço Contratado');
+        if (naoPagos.length === 0) { toast('Nenhuma nota em aberto para gerar relatório','info'); return; }
+
+        // Buscar mapeamento de clientes para dados complementares (email, telefone, contato)
+        let mapeamentos = [];
+        try {
+            const res = await fetch('/api/clientes/mapeamento');
+            const data = await res.json();
+            if (data.success) mapeamentos = data.data;
+        } catch(e) { console.warn('Sem mapeamento de clientes'); }
+        // Build lookup por CNPJ
+        const mapByCnpj = new Map();
+        mapeamentos.forEach(m => { if (m.cnpj) mapByCnpj.set(m.cnpj.replace(/[^\d]/g, ''), m); });
+
+        // Agrupar por devedor — CNPJ é chave primária (identifica filial)
+        // Se não tem CNPJ, usa razão social como fallback
+        const grupos = new Map();
+        naoPagos.forEach(r => {
+            const cnpj = (r.cnpj || '').trim();
+            const key = cnpj || (r.razaoSocial || 'Sem identificação').trim();
+            if (!grupos.has(key)) {
+                const cnpjLimpo = cnpj.replace(/[^\d]/g, '');
+                const m = mapByCnpj.get(cnpjLimpo) || {};
+                grupos.set(key, {
+                    razaoSocial: m.razao_social_completa || r.razaoSocial || '—',
+                    cnpj: cnpj || '—',
+                    estado: m.estado || r.estado || '—',
+                    email: m.email || '',
+                    telefone: m.telefone || '',
+                    contato: m.contato || '',
+                    endereco: m.endereco || '',
+                    cidade: m.cidade || r.cidade || '',
+                    notas: []
+                });
+            }
+            grupos.get(key).notas.push(r);
+        });
+
+        // Ordenar notas por data de emissão (mais antiga primeiro)
+        grupos.forEach(g => g.notas.sort((a, b) => (a.dataEmissao || 0) - (b.dataEmissao || 0)));
+
+        const hoje = new Date();
+        const dataRelatorio = fmt.date(hoje);
+        let totalGeral = 0;
+        let totalNotas = 0;
+
+        // Gerar tabelas por devedor
+        let tabelasHTML = '';
+        const gruposOrdenados = [...grupos.entries()].sort((a, b) => {
+            const totalA = a[1].notas.reduce((s, n) => s + n.valorLiquido, 0);
+            const totalB = b[1].notas.reduce((s, n) => s + n.valorLiquido, 0);
+            return totalB - totalA; // Maior devedor primeiro
+        });
+
+        gruposOrdenados.forEach(([key, grupo]) => {
+            const totalDevedor = grupo.notas.reduce((s, n) => s + n.valorLiquido, 0);
+            const notaMaisAntiga = grupo.notas[0];
+            const diasMaisAntiga = notaMaisAntiga ? Math.floor((hoje - new Date(notaMaisAntiga.dataEmissao)) / 864e5) : 0;
+            totalGeral += totalDevedor;
+            totalNotas += grupo.notas.length;
+
+            tabelasHTML += `
+            <div style="page-break-inside:avoid;margin-bottom:28px;">
+                <div style="background:#1a1a2e;color:#e0e0e0;padding:12px 16px;border-radius:8px 8px 0 0;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+                    <div>
+                        <strong style="font-size:15px;color:#fff;">${grupo.razaoSocial}</strong><br>
+                        <span style="font-size:12px;opacity:0.7;">CNPJ: <strong style="color:#fbbf24;">${grupo.cnpj}</strong> &nbsp;|&nbsp; UF: ${grupo.estado}${grupo.cidade ? ' — ' + grupo.cidade : ''}</span>
+                        ${grupo.endereco ? `<br><span style="font-size:11px;opacity:0.5;">📍 ${grupo.endereco}${grupo.cidade ? ', ' + grupo.cidade : ''}${grupo.estado !== '—' ? '/' + grupo.estado : ''}</span>` : ''}
+                        ${grupo.contato || grupo.email || grupo.telefone ? `<br><span style="font-size:11px;opacity:0.6;">${grupo.contato ? '👤 ' + grupo.contato + ' &nbsp;' : ''}${grupo.telefone ? '📞 ' + grupo.telefone + ' &nbsp;' : ''}${grupo.email ? '✉️ ' + grupo.email : ''}</span>` : ''}
+                        ${grupo.cnpj === '—' ? '<br><span style="font-size:10px;color:#fbbf24;">⚠️ CNPJ não cadastrado — use o Cadastro de Clientes no dashboard</span>' : ''}
+                    </div>
+                    <div style="text-align:right;">
+                        <span style="font-size:18px;font-weight:bold;color:#f87171;">${fmt.currency(totalDevedor)}</span><br>
+                        <span style="font-size:11px;opacity:0.7;">${grupo.notas.length} nota(s) &nbsp;|&nbsp; Mais antiga: ${diasMaisAntiga} dias</span>
+                    </div>
+                </div>
+                <table style="width:100%;border-collapse:collapse;font-size:12px;">
+                    <thead>
+                        <tr style="background:#f1f5f9;">
+                            <th style="padding:8px 10px;text-align:left;border-bottom:2px solid #cbd5e1;font-weight:600;">Nº NF</th>
+                            <th style="padding:8px 10px;text-align:left;border-bottom:2px solid #cbd5e1;font-weight:600;">Emissão</th>
+                            <th style="padding:8px 10px;text-align:right;border-bottom:2px solid #cbd5e1;font-weight:600;">Valor Bruto</th>
+                            <th style="padding:8px 10px;text-align:right;border-bottom:2px solid #cbd5e1;font-weight:600;">ISS</th>
+                            <th style="padding:8px 10px;text-align:right;border-bottom:2px solid #cbd5e1;font-weight:600;">Valor Líquido</th>
+                            <th style="padding:8px 10px;text-align:center;border-bottom:2px solid #cbd5e1;font-weight:600;">Dias em Aberto</th>
+                            <th style="padding:8px 10px;text-align:left;border-bottom:2px solid #cbd5e1;font-weight:600;">Previsão</th>
+                            <th style="padding:8px 10px;text-align:left;border-bottom:2px solid #cbd5e1;font-weight:600;">Observações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${grupo.notas.map((n, i) => {
+                            const dias = n.diasEmAberto || 0;
+                            const corDias = dias > 90 ? '#dc2626' : dias > 60 ? '#ea580c' : dias > 30 ? '#d97706' : '#16a34a';
+                            const bgRow = i % 2 === 0 ? '#fff' : '#f8fafc';
+                            return `<tr style="background:${bgRow};">
+                                <td style="padding:6px 10px;border-bottom:1px solid #e2e8f0;font-weight:600;">${n.numero || '—'}</td>
+                                <td style="padding:6px 10px;border-bottom:1px solid #e2e8f0;">${fmt.date(n.dataEmissao)}</td>
+                                <td style="padding:6px 10px;border-bottom:1px solid #e2e8f0;text-align:right;">${fmt.currency(n.valorNota)}</td>
+                                <td style="padding:6px 10px;border-bottom:1px solid #e2e8f0;text-align:right;">${fmt.currency(n.iss)}</td>
+                                <td style="padding:6px 10px;border-bottom:1px solid #e2e8f0;text-align:right;font-weight:600;">${fmt.currency(n.valorLiquido)}</td>
+                                <td style="padding:6px 10px;border-bottom:1px solid #e2e8f0;text-align:center;"><span style="color:${corDias};font-weight:bold;">${dias}d</span></td>
+                                <td style="padding:6px 10px;border-bottom:1px solid #e2e8f0;">${n.previsaoRecebimento ? fmt.date(n.previsaoRecebimento) : '—'}</td>
+                                <td style="padding:6px 10px;border-bottom:1px solid #e2e8f0;font-size:11px;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${(n.observacoes||'').replace(/"/g,'&quot;')}">${n.observacoes || '—'}</td>
+                            </tr>`;
+                        }).join('')}
+                    </tbody>
+                    <tfoot>
+                        <tr style="background:#f1f5f9;font-weight:bold;">
+                            <td colspan="4" style="padding:8px 10px;border-top:2px solid #cbd5e1;text-align:right;">Total ${grupo.razaoSocial.substring(0,30)}:</td>
+                            <td style="padding:8px 10px;border-top:2px solid #cbd5e1;text-align:right;color:#dc2626;">${fmt.currency(totalDevedor)}</td>
+                            <td colspan="3" style="padding:8px 10px;border-top:2px solid #cbd5e1;"></td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>`;
+        });
+
+        // Montar relatório completo
+        const html = `<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>Relatório de Cobrança - AVANT Serviços</title>
+    <style>
+        @media print {
+            body { margin: 0; }
+            .no-print { display: none !important; }
+            @page { margin: 15mm; size: A4 landscape; }
+        }
+        body { font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; color: #1e293b; margin: 20px; background: #fff; }
+    </style>
+</head>
+<body>
+    <div class="no-print" style="text-align:right;margin-bottom:16px;">
+        <button onclick="window.print()" style="background:#6366f1;color:#fff;border:none;padding:10px 24px;border-radius:8px;font-size:14px;cursor:pointer;font-weight:600;">🖨️ Imprimir / Salvar PDF</button>
+    </div>
+
+    <div style="text-align:center;margin-bottom:24px;border-bottom:3px solid #6366f1;padding-bottom:16px;">
+        <h1 style="margin:0;font-size:22px;color:#1e293b;">AVANT Serviços Integrados</h1>
+        <h2 style="margin:4px 0 0;font-size:16px;color:#6366f1;font-weight:600;">Relatório de Cobrança — Notas em Aberto</h2>
+        <p style="margin:8px 0 0;font-size:12px;color:#64748b;">Gerado em: ${dataRelatorio} &nbsp;|&nbsp; Período dos dados: conforme filtros do dashboard</p>
+    </div>
+
+    <div style="display:flex;gap:16px;margin-bottom:24px;flex-wrap:wrap;">
+        <div style="flex:1;min-width:180px;background:linear-gradient(135deg,#fee2e2,#fecaca);padding:16px;border-radius:10px;text-align:center;">
+            <div style="font-size:28px;font-weight:bold;color:#dc2626;">${fmt.currency(totalGeral)}</div>
+            <div style="font-size:12px;color:#991b1b;margin-top:4px;">Total em Aberto</div>
+        </div>
+        <div style="flex:1;min-width:180px;background:linear-gradient(135deg,#e0e7ff,#c7d2fe);padding:16px;border-radius:10px;text-align:center;">
+            <div style="font-size:28px;font-weight:bold;color:#4338ca;">${totalNotas}</div>
+            <div style="font-size:12px;color:#3730a3;margin-top:4px;">Notas Pendentes</div>
+        </div>
+        <div style="flex:1;min-width:180px;background:linear-gradient(135deg,#fef3c7,#fde68a);padding:16px;border-radius:10px;text-align:center;">
+            <div style="font-size:28px;font-weight:bold;color:#b45309;">${grupos.size}</div>
+            <div style="font-size:12px;color:#92400e;margin-top:4px;">Devedores</div>
+        </div>
+    </div>
+
+    ${tabelasHTML}
+
+    <div style="margin-top:32px;padding-top:16px;border-top:2px solid #e2e8f0;display:flex;justify-content:space-between;font-size:13px;">
+        <div><strong>Total Geral em Aberto: <span style="color:#dc2626;font-size:18px;">${fmt.currency(totalGeral)}</span></strong></div>
+        <div style="color:#64748b;">AVANT Serviços Integrados LTDA — Dashboard Financeiro</div>
+    </div>
+</body>
+</html>`;
+
+        // Abrir em nova aba
+        const w = window.open('', '_blank');
+        w.document.write(html);
+        w.document.close();
+    }
+}
+window.TableManager = new TableManager();
+
+// ═══════════════════════════════════════════════
+// MAIN APP
+// ═══════════════════════════════════════════════
+class DashboardApp {
+    constructor() { this.data=null; this.filteredData=null; this.analytics=null; }
+
+    async init() {
+        console.log('🚀 Inicializando AVANT Dashboard...');
+        this.setupEvents();
+        this.initTheme();
+        this.initDatePickers();
+        window.TableManager.init();
+        await this.loadFromAPI();
+        console.log('✅ Dashboard pronto');
+    }
+
+    setupEvents() {
+        document.getElementById('fileInput')?.addEventListener('change',e=>this.handleUpload(e));
+        document.getElementById('themeToggle')?.addEventListener('click',()=>this.toggleTheme());
+        document.getElementById('btnNovaNota')?.addEventListener('click',()=>this.openNotaModal());
+        document.getElementById('notaForm')?.addEventListener('submit',e=>{e.preventDefault();this.saveNota();});
+        document.getElementById('notaRecebido')?.addEventListener('change',e=>{document.getElementById('camposPagamento').classList.toggle('hidden',e.target.value!=='Recebido');});
+        const vn=document.getElementById('notaValorNota'),vi=document.getElementById('notaISS');
+        if(vn&&vi){const calc=()=>{document.getElementById('notaValorLiquido').value=((parseFloat(vn.value)||0)-(parseFloat(vi.value)||0)).toFixed(2);};vn.addEventListener('input',calc);vi.addEventListener('input',calc);}
+        document.getElementById('btnDeletarNota')?.addEventListener('click',()=>this.deleteNota());
+        document.getElementById('applyFilters')?.addEventListener('click',()=>window.FiltersManager.apply());
+        document.getElementById('clearFilters')?.addEventListener('click',()=>window.FiltersManager.clear());
+        document.getElementById('btnSincronizar')?.addEventListener('click',()=>this.openSyncModal());
+        document.getElementById('btnSyncAuto')?.addEventListener('click',()=>this.syncAuto());
+        document.getElementById('btnIniciarSync')?.addEventListener('click',()=>this.startSync());
+        document.getElementById('btnEnviarCaptcha')?.addEventListener('click',()=>this.sendCaptcha());
+        document.getElementById('captchaInput')?.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();this.sendCaptcha();}});
+        document.getElementById('btnConfirmarPagamento')?.addEventListener('click',()=>this.confirmPayment());
+        document.getElementById('btnSyncPagamentos')?.addEventListener('click',()=>this.openSyncPagamentos());
+        document.getElementById('btnIniciarSyncPgto')?.addEventListener('click',()=>this.executeSyncPagamentos());
+        document.getElementById('btnClientes')?.addEventListener('click',()=>this.openClientesModal());
+        document.getElementById('btnSalvarMapeamento')?.addEventListener('click',()=>this.salvarMapeamentoCliente());
+        document.getElementById('btnLimparFormMap')?.addEventListener('click',()=>this.limparFormMapeamento());
+
+        // KPI grid toggle
+        const toggle=document.getElementById('toggleKpiGrid');
+        if(toggle) toggle.addEventListener('click',()=>{
+            const grid=document.getElementById('kpiGrid');
+            const hidden=grid.classList.toggle('hidden');
+            document.getElementById('kpiGridToggleText').textContent=hidden?'Expandir':'Recolher';
+            document.getElementById('kpiGridChevron').style.transform=hidden?'':'rotate(180deg)';
+        });
+    }
+
+    initTheme() {
+        const t=localStorage.getItem('avant-theme')||'dark';
+        document.documentElement.setAttribute('data-theme',t);
+        this.updateThemeIcons(t);
+    }
+    toggleTheme() {
+        const t=document.documentElement.getAttribute('data-theme')==='light'?'dark':'light';
+        document.documentElement.setAttribute('data-theme',t);
+        localStorage.setItem('avant-theme',t);
+        this.updateThemeIcons(t);
+    }
+    updateThemeIcons(t) {
+        document.querySelector('.theme-light')?.classList.toggle('hidden',t==='dark');
+        document.querySelector('.theme-dark')?.classList.toggle('hidden',t==='light');
+    }
+
+    initDatePickers() {
+        const cfg={locale:'pt',dateFormat:'d/m/Y',allowInput:true};
+        flatpickr('#startDate',{...cfg,onChange:d=>{if(d[0]) window.FiltersManager.updateDate('start',d[0]);}});
+        flatpickr('#endDate',{...cfg,onChange:d=>{if(d[0]) window.FiltersManager.updateDate('end',d[0]);}});
+    }
+
+    async loadFromAPI() {
+        try {
+            const [notasRes, analyticsRes] = await Promise.all([
+                fetch('/api/notas').then(r=>r.json()),
+                fetch('/api/analytics').then(r=>r.json()).catch(()=>null)
+            ]);
+            if(!notasRes.success) throw new Error(notasRes.error);
+            const data = window.DataService.processAPIData(notasRes.data);
+            this.analytics = analyticsRes?.data || null;
+            this.processData(data);
+            document.getElementById('connectionStatus')?.classList.add('hidden');
+            if(data.length>0) document.getElementById('welcomeMessage')?.classList.add('hidden');
+            console.log(`✅ ${data.length} notas carregadas`);
+        } catch(e) {
+            console.warn('⚠️ Erro API:', e.message);
+            if(e.message.includes('fetch')) document.getElementById('connectionStatus')?.classList.remove('hidden');
+        }
+    }
+
+    processData(data) {
+        this.data = data;
+        this.filteredData = [...data];
+        this.updateSummary();
+        window.FiltersManager.init(data);
+        this.renderAll(this.filteredData);
+        this.showContent();
+    }
+
+    updateFiltered(data) {
+        this.filteredData = data;
+        this.updateSummary();
+        this.renderAll(data);
+    }
+
+    renderAll(data) {
+        this.renderHeroKPIs(data);
+        this.renderSecondaryKPIs(data);
+        window.KPICards.update(data);
+        window.ChartsManager.update(data, this.analytics);
+        window.TableManager.update(data);
+    }
+
+    renderHeroKPIs(data) {
+        const bruto = data.reduce((s,r)=>s+r.valorNota,0);
+        const liquido = data.reduce((s,r)=>s+r.valorLiquido,0);
+        const recebido = data.filter(r=>r.recebido==='Recebido').reduce((s,r)=>s+r.valorLiquido,0);
+        const aberto = data.filter(r=>r.recebido==='Em aberto').reduce((s,r)=>s+r.valorLiquido,0);
+        const nRecebido = data.filter(r=>r.recebido==='Recebido').length;
+        const nAberto = data.filter(r=>r.recebido==='Em aberto').length;
+
+        document.getElementById('kpi-bruto').textContent = fmt.currency(bruto);
+        document.getElementById('kpi-bruto-sub').textContent = `${fmt.num(data.length)} notas`;
+        document.getElementById('kpi-liquido').textContent = fmt.currency(liquido);
+        document.getElementById('kpi-liquido-sub').textContent = `ISS: ${fmt.currency(bruto-liquido)}`;
+        document.getElementById('kpi-recebido').textContent = fmt.currency(recebido);
+        document.getElementById('kpi-recebido-sub').textContent = `${fmt.num(nRecebido)} notas`;
+        document.getElementById('kpi-aberto').textContent = fmt.currency(aberto);
+        document.getElementById('kpi-aberto-sub').textContent = `${fmt.num(nAberto)} notas`;
+    }
+
+    renderSecondaryKPIs(data) {
+        document.getElementById('kpi-qtd').textContent = fmt.num(data.length);
+        const ticket = data.length ? data.reduce((s,r)=>s+r.valorLiquido,0)/data.length : 0;
+        document.getElementById('kpi-ticket').textContent = fmt.currencyShort(ticket);
+        const totalLiq = data.reduce((s,r)=>s+r.valorLiquido,0);
+        const valRecebido = data.filter(r=>r.recebido==='Recebido').reduce((s,r)=>s+r.valorLiquido,0);
+        document.getElementById('kpi-pctrecebido').textContent = totalLiq ? fmt.pct(valRecebido/totalLiq*100) : '0 %';
+        const pagos = data.filter(r=>r.recebido==='Recebido'&&r.diasPagamento>0);
+        const dso = pagos.length ? pagos.reduce((s,r)=>s+r.diasPagamento,0)/pagos.length : 0;
+        document.getElementById('kpi-dso').textContent = fmt.days(dso);
+        document.getElementById('kpi-iss').textContent = fmt.currencyShort(data.reduce((s,r)=>s+r.iss,0));
+        const aging90 = data.filter(r=>r.recebido==='Em aberto'&&r.agingBucket==='90+').reduce((s,r)=>s+r.valorLiquido,0);
+        document.getElementById('kpi-aging90').textContent = fmt.currencyShort(aging90);
+    }
+
+    updateSummary() {
+        document.getElementById('totalRecords').textContent = this.data?.length || 0;
+        document.getElementById('filteredRecords').textContent = this.filteredData?.length || 0;
+        document.getElementById('lastUpdate').textContent = new Date().toLocaleString('pt-BR');
+    }
+
+    showContent() {
+        document.getElementById('welcomeMessage')?.classList.add('hidden');
+        ['heroSection','secondarySection','chartsSection','kpiGridSection','tableSection'].forEach(id=>document.getElementById(id)?.classList.remove('hidden'));
+    }
+
+    // ── NOTA CRUD ──
+    openNotaModal(nota=null) {
+        document.getElementById('notaForm').reset();
+        document.getElementById('notaId').value='';
+        document.getElementById('notaValorLiquido').value='';
+        document.getElementById('camposPagamento').classList.add('hidden');
+        if(nota){
+            document.getElementById('notaModalTitle').textContent=`Editar Nota #${nota.numero}`;
+            document.getElementById('btnDeletarNota').classList.remove('hidden');
+            document.getElementById('notaId').value=nota.id;
+            document.getElementById('notaNumero').value=nota.numero||'';
+            document.getElementById('notaCnpj').value=nota.cnpj||'';
+            document.getElementById('notaRazaoSocial').value=nota.razaoSocial||'';
+            document.getElementById('notaDataEmissao').value=nota.dataEmissao?nota.dataEmissao.toISOString().split('T')[0]:'';
+            document.getElementById('notaPrevisao').value=nota.previsaoRecebimento?nota.previsaoRecebimento.toISOString().split('T')[0]:'';
+            document.getElementById('notaValorNota').value=nota.valorNota||'';
+            document.getElementById('notaISS').value=nota.iss||0;
+            document.getElementById('notaValorLiquido').value=nota.valorLiquido||'';
+            document.getElementById('notaEstado').value=nota.estado||'';
+            document.getElementById('notaCidade').value=nota.cidade||'';
+            document.getElementById('notaRecebido').value=nota.recebido||'Em aberto';
+            document.getElementById('notaObservacoes').value=nota.observacoes||'';
+            if(nota.recebido==='Recebido'){
+                document.getElementById('camposPagamento').classList.remove('hidden');
+                document.getElementById('notaDataPagamento').value=nota.dataPagamento?nota.dataPagamento.toISOString().split('T')[0]:'';
+                document.getElementById('notaFormaPagamento').value=nota.formaPagamento||'PIX';
+                document.getElementById('notaStatusConciliado').value=nota.statusConciliado||'Pago no Prazo';
+            }
+        } else {
+            document.getElementById('notaModalTitle').textContent='Nova Nota Fiscal';
+            document.getElementById('btnDeletarNota').classList.add('hidden');
+            document.getElementById('notaDataEmissao').value=new Date().toISOString().split('T')[0];
+        }
+        document.getElementById('notaModal').showModal();
+    }
+    editNota(id) {
+        const nota = this.data?.find(r=>r.id===id);
+        if(nota) this.openNotaModal(nota);
+    }
+    async saveNota() {
+        try {
+            const id=document.getElementById('notaId').value;
+            const nota={
+                numero:document.getElementById('notaNumero').value.trim(),
+                cnpj:document.getElementById('notaCnpj').value.trim(),
+                razao_social:document.getElementById('notaRazaoSocial').value.trim(),
+                data_emissao:document.getElementById('notaDataEmissao').value,
+                previsao_recebimento:document.getElementById('notaPrevisao').value||null,
+                valor_nota:parseFloat(document.getElementById('notaValorNota').value)||0,
+                iss:parseFloat(document.getElementById('notaISS').value)||0,
+                valor_liquido:parseFloat(document.getElementById('notaValorLiquido').value)||0,
+                estado:document.getElementById('notaEstado').value.trim().toUpperCase(),
+                cidade:document.getElementById('notaCidade').value.trim(),
+                recebido:document.getElementById('notaRecebido').value,
+                observacoes:document.getElementById('notaObservacoes').value.trim()||null
+            };
+            if(nota.recebido==='Recebido'){
+                nota.data_pagamento=document.getElementById('notaDataPagamento').value||null;
+                nota.forma_pagamento=document.getElementById('notaFormaPagamento').value;
+                nota.status_conciliado=document.getElementById('notaStatusConciliado').value;
+            }
+            const res=await fetch(id?`/api/notas/${id}`:'/api/notas',{method:id?'PUT':'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(nota)});
+            const result=await res.json();
+            if(!result.success) throw new Error(result.error);
+            document.getElementById('notaModal').close();
+            await this.loadFromAPI();
+            toast(id?'Nota atualizada!':'Nota cadastrada!','success');
+        } catch(e){ toast('Erro: '+e.message,'error'); }
+    }
+    async deleteNota() {
+        const id=document.getElementById('notaId').value;
+        if(!id||!confirm('Excluir esta nota?')) return;
+        try {
+            const res=await fetch(`/api/notas/${id}`,{method:'DELETE'});
+            const result=await res.json();
+            if(!result.success) throw new Error(result.error);
+            document.getElementById('notaModal').close();
+            await this.loadFromAPI();
+            toast('Nota excluída','success');
+        } catch(e){ toast('Erro: '+e.message,'error'); }
+    }
+
+    // ── FILE UPLOAD ──
+    async handleUpload(e) {
+        const file=e.target.files[0]; if(!file) return;
+        if(!file.name.match(/\.(xlsx|xls)$/i)){toast('Selecione um arquivo Excel','error');return;}
+        try {
+            document.getElementById('loadingOverlay').classList.remove('hidden');
+            document.getElementById('loadingMsg').textContent='Importando planilha...';
+            const fd=new FormData(); fd.append('arquivo',file);
+            const res=await fetch('/api/importar',{method:'POST',body:fd});
+            const result=await res.json();
+            if(!result.success) throw new Error(result.error);
+            await this.loadFromAPI();
+            document.getElementById('loadingOverlay').classList.add('hidden');
+            toast(`${result.data.inseridos} notas importadas, ${result.data.ignorados} duplicadas`,'success');
+            e.target.value='';
+        } catch(err){ document.getElementById('loadingOverlay').classList.add('hidden'); toast('Erro: '+err.message,'error'); }
+    }
+
+    // ── SYNC PAGAMENTOS (Finnet/Cimed) ──
+    openSyncPagamentos() {
+        // Reset all steps
+        document.getElementById('pgtoTabXLS').classList.remove('hidden');
+        document.getElementById('pgtoTabAuto').classList.add('hidden');
+        document.getElementById('xlsStep1').classList.remove('hidden');
+        document.getElementById('xlsStep2').classList.add('hidden');
+        document.getElementById('syncPgtoStep1').classList.remove('hidden');
+        document.getElementById('syncPgtoStep2').classList.add('hidden');
+        document.getElementById('syncPgtoStep3').classList.add('hidden');
+        document.getElementById('syncPgtoErro').classList.add('hidden');
+        document.getElementById('finnetXLSFile').value = '';
+        // Set active tab
+        document.getElementById('tabImportXLS').classList.add('tab-active');
+        document.getElementById('tabSyncAuto').classList.remove('tab-active');
+        this.preloadCredentials();
+        document.getElementById('syncPagamentosModal').showModal();
+        lucide.createIcons();
+    }
+
+    async executeSyncPagamentos() {
+        const email = document.getElementById('finnetEmail').value.trim();
+        const senha = document.getElementById('finnetSenha').value.trim();
+
+        document.getElementById('syncPgtoStep1').classList.add('hidden');
+        document.getElementById('syncPgtoStep2').classList.remove('hidden');
+        document.getElementById('syncPgtoErro').classList.add('hidden');
+
+        try {
+            const res = await fetch('/api/pagamentos/sync', {
+                method: 'POST',
+                headers: {'Content-Type':'application/json'},
+                body: JSON.stringify({ email, senha })
+            });
+            const result = await res.json();
+            if(!result.success) throw new Error(result.error);
+
+            this.showPgtoResult(result.data);
+
+            if(result.data.atualizados > 0) await this.loadFromAPI();
+        } catch(e) {
+            document.getElementById('syncPgtoStep2').classList.add('hidden');
+            document.getElementById('syncPgtoStep1').classList.remove('hidden');
+            document.getElementById('syncPgtoErroMsg').textContent = e.message;
+            document.getElementById('syncPgtoErro').classList.remove('hidden');
+        }
+    }
+
+    async preloadCredentials() {
+        try {
+            const res = await fetch('/api/config/credentials');
+            const cfg = await res.json();
+            const emailEl = document.getElementById('finnetEmail');
+            const senhaEl = document.getElementById('finnetSenha');
+            if (cfg.finnet.email && !emailEl.value) emailEl.value = cfg.finnet.email;
+            if (cfg.finnet.hasSenha && !senhaEl.value) senhaEl.placeholder = '••••••• (salva no .env)';
+            const nfseLoginEl = document.getElementById('nfseLogin');
+            const nfseSenhaEl = document.getElementById('nfseSenha');
+            if (nfseLoginEl && cfg.nfse.login && !nfseLoginEl.value) nfseLoginEl.value = cfg.nfse.login;
+            if (nfseSenhaEl && cfg.nfse.hasSenha && !nfseSenhaEl.value) nfseSenhaEl.placeholder = '••••••• (salva no .env)';
+        } catch(e) { /* silently fail */ }
+    }
+
+    showPgtoResult(d) {
+        document.getElementById('pgtoTabXLS').classList.add('hidden');
+        document.getElementById('pgtoTabAuto').classList.add('hidden');
+        document.getElementById('syncPgtoStep2').classList.add('hidden');
+        document.getElementById('xlsStep2').classList.add('hidden');
+
+        document.getElementById('syncPgtoResultado').innerHTML = `
+            <div class="text-5xl mb-3">${d.atualizados > 0 ? '🎉' : '✅'}</div>
+            <h4 class="text-lg font-bold mb-1">${d.atualizados > 0 ? 'Pagamentos atualizados!' : 'Tudo sincronizado!'}</h4>
+            <div class="grid grid-cols-2 gap-2 text-center mt-4">
+                <div class="bg-base-200 rounded-lg p-2"><div class="text-lg font-bold text-info">${d.totalExtraidos || 0}</div><div class="text-[0.6rem] opacity-50">Encontrados</div></div>
+                <div class="bg-base-200 rounded-lg p-2"><div class="text-lg font-bold text-success">${d.atualizados || 0}</div><div class="text-[0.6rem] opacity-50">Atualizados</div></div>
+                <div class="bg-base-200 rounded-lg p-2"><div class="text-lg font-bold opacity-40">${d.jaRecebidos || 0}</div><div class="text-[0.6rem] opacity-50">Já recebidos</div></div>
+                <div class="bg-base-200 rounded-lg p-2"><div class="text-lg font-bold text-warning">${d.naoEncontrados || 0}</div><div class="text-[0.6rem] opacity-50">Não encontrados</div></div>
+            </div>
+        `;
+        document.getElementById('syncPgtoStep3').classList.remove('hidden');
+    }
+
+    // ── PAYMENT QUICK MARK ──
+    openPaymentModal(id) {
+        const nota = this.data?.find(r=>r.id===id);
+        if(!nota) { toast('Nota não encontrada','error'); return; }
+        document.getElementById('paymentNotaId').value = id;
+        document.getElementById('paymentNotaInfo').textContent = `NF #${nota.numero} — ${nota.razaoSocial || 'Sem razão social'} — ${fmt.currency(nota.valorLiquido)}`;
+        document.getElementById('paymentData').value = new Date().toISOString().split('T')[0];
+        document.getElementById('paymentForma').value = 'PIX';
+        document.getElementById('paymentObs').value = '';
+        document.getElementById('paymentModal').showModal();
+        lucide.createIcons();
+    }
+
+    async confirmPayment() {
+        const id = document.getElementById('paymentNotaId').value;
+        const dataPgto = document.getElementById('paymentData').value;
+        if(!id || !dataPgto) { toast('Informe a data do pagamento','warning'); return; }
+        try {
+            const body = {
+                data_pagamento: dataPgto,
+                forma_pagamento: document.getElementById('paymentForma').value
+            };
+            const obs = document.getElementById('paymentObs').value.trim();
+            if(obs) body.observacoes = obs;
+            const res = await fetch(`/api/notas/${id}/pagar`, {
+                method: 'PUT',
+                headers: {'Content-Type':'application/json'},
+                body: JSON.stringify(body)
+            });
+            const result = await res.json();
+            if(!result.success) throw new Error(result.error);
+            document.getElementById('paymentModal').close();
+            await this.loadFromAPI();
+            toast('Nota marcada como paga!','success');
+        } catch(e) { toast('Erro: '+e.message,'error'); }
+    }
+
+    // ── SYNC NFS-e ──
+    openSyncModal() {
+        ['captchaStep1','captchaStep2','captchaStep3','captchaStep4'].forEach((id,i)=>document.getElementById(id).classList.toggle('hidden',i!==0));
+        document.getElementById('captchaErro').classList.add('hidden');
+        document.getElementById('captchaInput').value='';
+        this.preloadCredentials();
+        document.getElementById('captchaModal').showModal();
+        lucide.createIcons();
+    }
+    showStep(n){['captchaStep1','captchaStep2','captchaStep3','captchaStep4'].forEach((id,i)=>document.getElementById(id).classList.toggle('hidden',i!==n-1));document.getElementById('captchaErro').classList.add('hidden');}
+    showSyncError(msg){document.getElementById('captchaErroMsg').textContent=msg;document.getElementById('captchaErro').classList.remove('hidden');}
+
+    async startSync() {
+        const login=document.getElementById('nfseLogin').value.trim(), senha=document.getElementById('nfseSenha').value.trim();
+        if(!login||!senha){this.showSyncError('Preencha login e senha.');return;}
+        this.showStep(2); document.getElementById('captchaLoadingMsg').textContent='Acessando portal...';
+        try {
+            const res=await fetch('/api/nfse/iniciar',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({login,senha})});
+            const data=await res.json();
+            if(!res.ok) throw new Error(data.erro||'Erro');
+            if(data.captchaImage){document.getElementById('captchaImage').src='data:image/png;base64,'+data.captchaImage;this.showStep(3);setTimeout(()=>document.getElementById('captchaInput').focus(),100);}
+        } catch(e){this.showStep(1);this.showSyncError(e.message);}
+    }
+
+    async syncAuto() {
+        const login=document.getElementById('nfseLogin').value.trim(), senha=document.getElementById('nfseSenha').value.trim();
+        if(!login||!senha){this.showSyncError('Preencha login e senha.');return;}
+        this.showStep(2);
+        document.getElementById('captchaLoadingMsg').textContent='Resolvendo CAPTCHA (OCR)...';
+        document.getElementById('captchaLoadingDetail').textContent='Pode levar alguns segundos';
+        try {
+            const res=await fetch('/api/nfse/sync-auto',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({login,senha})});
+            const data=await res.json();
+            if(!res.ok){
+                if(res.status===422&&data.captchaImage){
+                    document.getElementById('captchaImage').src=data.captchaImage;
+                    document.getElementById('captchaInput').value='';
+                    this.showStep(3);
+                    this.showSyncError(`OCR falhou em ${data.tentativas||3} tentativas. Digite manualmente:`);
+                    document.getElementById('captchaInput').focus();
+                    return;
+                }
+                if(res.status===422){this.showStep(1);this.showSyncError(data.erro||'OCR falhou. Tente manual.');return;}
+                throw new Error(data.erro||'Erro');
+            }
+            this.showSyncResult(data);
+            if(data.novasNotas>0) await this.loadFromAPI();
+        } catch(e){this.showStep(1);this.showSyncError(e.message);}
+    }
+
+    async sendCaptcha() {
+        const texto=document.getElementById('captchaInput').value.trim();
+        if(!texto){this.showSyncError('Digite o CAPTCHA.');return;}
+        this.showStep(2); document.getElementById('captchaLoadingMsg').textContent='Verificando CAPTCHA...';
+        try {
+            const res=await fetch('/api/nfse/captcha',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({textoCaptcha:texto})});
+            const data=await res.json();
+            if(!res.ok){
+                if(data.captchaImage){document.getElementById('captchaImage').src='data:image/png;base64,'+data.captchaImage;document.getElementById('captchaInput').value='';this.showStep(3);this.showSyncError(data.erro||'CAPTCHA incorreto.');document.getElementById('captchaInput').focus();return;}
+                throw new Error(data.erro||'Erro');
+            }
+            this.showSyncResult(data);
+            if(data.novasNotas>0) await this.loadFromAPI();
+        } catch(e){this.showStep(3);this.showSyncError(e.message);}
+    }
+
+    // ── CLIENTES MAPEAMENTO ──
+    async openClientesModal() {
+        // Populate select with distinct razão socials from data
+        const sel = document.getElementById('mapRazaoCurta');
+        sel.innerHTML = '<option value="">Selecione...</option>';
+        if (this.data) {
+            const seen = new Set();
+            this.data.forEach(r => {
+                const rs = (r.razaoSocial || '').trim();
+                if (rs && !seen.has(rs.toUpperCase())) {
+                    seen.add(rs.toUpperCase());
+                    sel.innerHTML += `<option value="${rs}">${rs}</option>`;
+                }
+            });
+        }
+        await this.loadMapeamentos();
+        document.getElementById('clientesModal').showModal();
+        lucide.createIcons();
+    }
+
+    async loadMapeamentos() {
+        try {
+            const res = await fetch('/api/clientes/mapeamento');
+            const data = await res.json();
+            const tbody = document.getElementById('mapeamentoTableBody');
+            if (!data.success || !data.data.length) {
+                tbody.innerHTML = '<tr><td colspan="5" class="text-center opacity-40 py-4">Nenhum mapeamento cadastrado</td></tr>';
+                return;
+            }
+            tbody.innerHTML = data.data.map(m => `<tr class="hover">
+                <td class="text-xs">${m.razao_social_curta}</td>
+                <td class="text-xs">${m.razao_social_completa || '—'}</td>
+                <td class="text-xs font-mono">${m.cnpj || '—'}</td>
+                <td class="text-xs">${m.contato || '—'}</td>
+                <td class="flex gap-1">
+                    <button class="btn btn-ghost btn-xs" onclick="window.App.editarMapeamento(${m.id})" title="Editar"><i data-lucide="pencil" class="w-3 h-3"></i></button>
+                    <button class="btn btn-ghost btn-xs text-error" onclick="window.App.deletarMapeamento(${m.id})" title="Excluir"><i data-lucide="trash-2" class="w-3 h-3"></i></button>
+                </td>
+            </tr>`).join('');
+            lucide.createIcons();
+        } catch(e) { console.error('Erro ao carregar mapeamentos:', e); }
+    }
+
+    async salvarMapeamentoCliente() {
+        const razaoCurta = document.getElementById('mapRazaoCurta').value.trim();
+        const cnpj = document.getElementById('mapCnpj').value.trim();
+        if (!razaoCurta || !cnpj) { toast('Razão social e CNPJ são obrigatórios','warning'); return; }
+        const body = {
+            razao_social_curta: razaoCurta,
+            razao_social_completa: document.getElementById('mapRazaoCompleta').value.trim(),
+            cnpj,
+            email: document.getElementById('mapEmail').value.trim(),
+            telefone: document.getElementById('mapTelefone').value.trim(),
+            contato: document.getElementById('mapContato').value.trim(),
+            endereco: document.getElementById('mapEndereco').value.trim(),
+            cidade: document.getElementById('mapCidade').value.trim(),
+            estado: document.getElementById('mapEstado').value.trim()
+        };
+        try {
+            const res = await fetch('/api/clientes/mapeamento', {
+                method: 'POST',
+                headers: {'Content-Type':'application/json'},
+                body: JSON.stringify(body)
+            });
+            const result = await res.json();
+            if (!result.success) throw new Error(result.error);
+            toast('Mapeamento salvo!','success');
+            this.limparFormMapeamento();
+            await this.loadMapeamentos();
+        } catch(e) { toast('Erro: '+e.message,'error'); }
+    }
+
+    limparFormMapeamento() {
+        document.getElementById('mapRazaoCurta').value = '';
+        document.getElementById('mapRazaoCompleta').value = '';
+        document.getElementById('mapCnpj').value = '';
+        document.getElementById('mapEmail').value = '';
+        document.getElementById('mapTelefone').value = '';
+        document.getElementById('mapContato').value = '';
+        document.getElementById('mapEndereco').value = '';
+        document.getElementById('mapCidade').value = '';
+        document.getElementById('mapEstado').value = '';
+    }
+
+    async editarMapeamento(id) {
+        try {
+            const res = await fetch('/api/clientes/mapeamento');
+            const data = await res.json();
+            const m = data.data?.find(x => x.id === id);
+            if (!m) return;
+            document.getElementById('mapRazaoCurta').value = m.razao_social_curta;
+            document.getElementById('mapRazaoCompleta').value = m.razao_social_completa || '';
+            document.getElementById('mapCnpj').value = m.cnpj || '';
+            document.getElementById('mapEmail').value = m.email || '';
+            document.getElementById('mapTelefone').value = m.telefone || '';
+            document.getElementById('mapContato').value = m.contato || '';
+            document.getElementById('mapEndereco').value = m.endereco || '';
+            document.getElementById('mapCidade').value = m.cidade || '';
+            document.getElementById('mapEstado').value = m.estado || '';
+        } catch(e) { toast('Erro ao carregar dados','error'); }
+    }
+
+    async deletarMapeamento(id) {
+        if (!confirm('Excluir este mapeamento?')) return;
+        try {
+            const res = await fetch(`/api/clientes/mapeamento/${id}`, { method: 'DELETE' });
+            const result = await res.json();
+            if (!result.success) throw new Error(result.error);
+            toast('Mapeamento excluído','success');
+            await this.loadMapeamentos();
+        } catch(e) { toast('Erro: '+e.message,'error'); }
+    }
+
+    showSyncResult(data) {
+        const novas=data.novasNotas||0, total=data.totalExtraidas||0, dup=data.duplicadas||0, cnpj=data.atualizadasCnpj||0;
+        document.getElementById('syncResultado').innerHTML=`
+            <div class="text-5xl mb-3">${novas>0?'🎉':'✅'}</div>
+            <h4 class="text-lg font-bold mb-1">${novas>0?'Notas importadas!':'Tudo atualizado!'}</h4>
+            ${data.tentativas?`<p class="text-[0.65rem] opacity-40 mb-3">OCR: ${data.tentativas} tentativa${data.tentativas>1?'s':''}</p>`:''}
+            <div class="grid grid-cols-2 gap-2 text-center">
+                <div class="bg-base-200 rounded-lg p-2"><div class="text-lg font-bold text-warning">${total}</div><div class="text-[0.6rem] opacity-50">Encontradas</div></div>
+                <div class="bg-base-200 rounded-lg p-2"><div class="text-lg font-bold text-success">${novas}</div><div class="text-[0.6rem] opacity-50">Novas</div></div>
+                <div class="bg-base-200 rounded-lg p-2"><div class="text-lg font-bold opacity-40">${dup}</div><div class="text-[0.6rem] opacity-50">Duplicadas</div></div>
+                <div class="bg-base-200 rounded-lg p-2"><div class="text-lg font-bold text-info">${cnpj}</div><div class="text-[0.6rem] opacity-50">CNPJs atualizados</div></div>
+            </div>`;
+        this.showStep(4);
+    }
+}
+
+// ── FUNÇÕES GLOBAIS PAGAMENTOS ──
+function switchPgtoTab(tab) {
+    const xlsTab = document.getElementById('pgtoTabXLS');
+    const autoTab = document.getElementById('pgtoTabAuto');
+    const tabXLSBtn = document.getElementById('tabImportXLS');
+    const tabAutoBtn = document.getElementById('tabSyncAuto');
+    document.getElementById('syncPgtoErro').classList.add('hidden');
+
+    if (tab === 'xls') {
+        xlsTab.classList.remove('hidden');
+        autoTab.classList.add('hidden');
+        tabXLSBtn.classList.add('tab-active');
+        tabAutoBtn.classList.remove('tab-active');
+    } else {
+        xlsTab.classList.add('hidden');
+        autoTab.classList.remove('hidden');
+        tabXLSBtn.classList.remove('tab-active');
+        tabAutoBtn.classList.add('tab-active');
+    }
+}
+
+async function importarPagamentosXLS() {
+    const fileInput = document.getElementById('finnetXLSFile');
+    if (!fileInput.files.length) {
+        document.getElementById('syncPgtoErroMsg').textContent = 'Selecione um arquivo XLS.';
+        document.getElementById('syncPgtoErro').classList.remove('hidden');
+        return;
+    }
+
+    document.getElementById('xlsStep1').classList.add('hidden');
+    document.getElementById('xlsStep2').classList.remove('hidden');
+    document.getElementById('syncPgtoErro').classList.add('hidden');
+
+    try {
+        const fd = new FormData();
+        fd.append('arquivo', fileInput.files[0]);
+
+        const res = await fetch('/api/pagamentos/importar-xls', { method: 'POST', body: fd });
+        const result = await res.json();
+        if (!result.success) throw new Error(result.error);
+
+        window.App.showPgtoResult(result.data);
+        if (result.data.atualizados > 0) await window.App.loadFromAPI();
+    } catch (e) {
+        document.getElementById('xlsStep2').classList.add('hidden');
+        document.getElementById('xlsStep1').classList.remove('hidden');
+        document.getElementById('syncPgtoErroMsg').textContent = e.message;
+        document.getElementById('syncPgtoErro').classList.remove('hidden');
+    }
+}
+
+// ── BOOT ──
+document.addEventListener('DOMContentLoaded', () => {
+    window.App = new DashboardApp();
+    window.App.init();
+});
+</script>
+
+</body>
+</html>
