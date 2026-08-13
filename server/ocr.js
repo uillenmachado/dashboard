@@ -21,6 +21,7 @@ async function getWorker() {
         await worker.setParameters({
             tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789',
             tessedit_pageseg_mode: '8', // Single word
+            user_defined_dpi: '300', // Evita "Invalid resolution" — PNG gerado não traz DPI no header
         });
         logger.info('✅ Tesseract OCR pronto');
     }

@@ -1,4 +1,5 @@
 @echo off
+chcp 65001 >nul
 title Dashboard Analitico - Notas Fiscais
 echo.
 echo Iniciando Dashboard Analitico...

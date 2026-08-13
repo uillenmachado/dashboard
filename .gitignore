@@ -28,6 +28,8 @@ _reprocessar_*
 
 # Planilhas-fonte locais (não versionar dados fiscais reais)
 base de dados.xlsx
+~$*.xlsx
+~$*.xls
 
 # IDE / OS
 .vscode/

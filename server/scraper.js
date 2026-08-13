@@ -37,6 +37,32 @@ function ensureDebugDir() {
     if (!fs.existsSync(DEBUG_DIR)) fs.mkdirSync(DEBUG_DIR, { recursive: true });
 }
 
+/**
+ * Fecha popups SweetAlert2 que o portal eventualmente exibe (ex: avisos pós-login),
+ * que ficam sobrepostos à página e bloqueiam cliques ("subtree intercepts pointer events").
+ */
+async function fecharPopupSeExistir(page) {
+    try {
+        const popup = await page.$('.swal2-popup');
+        if (!popup) return;
+
+        logger.info('⚠️ Popup detectado no portal — fechando antes de prosseguir...');
+
+        const botao = await page.$('.swal2-confirm, .swal2-close, .swal2-cancel');
+        if (botao) {
+            await botao.click({ timeout: 3000 }).catch(() => {});
+        } else {
+            await page.evaluate(() => { if (window.Swal) window.Swal.close(); }).catch(() => {});
+        }
+
+        await page.waitForSelector('.swal2-popup', { state: 'detached', timeout: 3000 }).catch(async () => {
+            await page.keyboard.press('Escape').catch(() => {});
+        });
+    } catch (e) {
+        logger.warn(`Não foi possível fechar popup do portal: ${e.message}`);
+    }
+}
+
 // Estado da sessão de scraping em andamento
 let sessaoAtiva = null;
 
@@ -294,6 +320,7 @@ async function extrairNotas(page) {
         ensureDebugDir();
 
         // === Passo 1: Expandir accordion NFS-e ===
+        await fecharPopupSeExistir(page);
         logger.info('📂 Expandindo menu NFS-e...');
         const tdNfse = await page.$('td[onclick*="mostrarFecharSetorNF"]');
         if (tdNfse) {
@@ -313,6 +340,7 @@ async function extrairNotas(page) {
         }
 
         // === Passo 2: Clicar em "Nota Fiscal Eletrônica" ===
+        await fecharPopupSeExistir(page);
         logger.info('📌 Navegando para "Nota Fiscal Eletrônica"...');
         const linkNFE = await page.$('a:has-text("Nota Fiscal Eletrônica")');
         if (!linkNFE) {
@@ -346,6 +374,7 @@ async function extrairNotas(page) {
         // === Passo 3: Clicar Pesquisar SOMENTE se visível ===
         // A URL executarFiltrar já carrega os dados; Pesquisar pode não ser necessário
         try {
+            await fecharPopupSeExistir(page);
             const btnPesquisar = await page.$('input[value="Pesquisar"]');
             if (btnPesquisar) {
                 const isVisible = await btnPesquisar.isVisible().catch(() => false);
