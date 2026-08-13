@@ -340,12 +340,13 @@ async function sincronizarPagamentos(email, senha) {
         logger.info('📅 Ajustando filtros de data para período máximo...');
         let totalRegistrosPortal = null;
 
-        // Calcular datas: início = hoje - 365 dias, fim = hoje
+        // Calcular datas: início = piso fixo (cobre todo o histórico da AVANT), fim = hoje.
+        // ATENÇÃO: já foi "hoje - 365 dias" — isso excluía silenciosamente qualquer
+        // pagamento anterior a 1 ano atrás, causando discrepância entre o portal
+        // (que mostra todo o histórico) e o que o sync realmente reconciliava.
         const hoje = new Date();
         const dataFim = `${String(hoje.getDate()).padStart(2,'0')}/${String(hoje.getMonth()+1).padStart(2,'0')}/${hoje.getFullYear()}`;
-        const inicio = new Date(hoje);
-        inicio.setDate(inicio.getDate() - 365);
-        const dataInicio = `${String(inicio.getDate()).padStart(2,'0')}/${String(inicio.getMonth()+1).padStart(2,'0')}/${inicio.getFullYear()}`;
+        const dataInicio = '01/01/2020';
 
         // 4a) Expandir filtros se estiverem colapsados
         // Procurar botão/link de toggle dos filtros
