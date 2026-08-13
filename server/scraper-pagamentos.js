@@ -338,6 +338,7 @@ async function sincronizarPagamentos(email, senha) {
         // ── STEP 4: Ajustar filtros de data para capturar o máximo de dados ──
         // O portal filtra por padrão os últimos 3 meses. Vamos expandir para capturar tudo.
         logger.info('📅 Ajustando filtros de data para período máximo...');
+        let totalRegistrosPortal = null;
 
         // Calcular datas: início = hoje - 365 dias, fim = hoje
         const hoje = new Date();
@@ -529,6 +530,7 @@ async function sincronizarPagamentos(email, senha) {
                     }
                     return null;
                 });
+                totalRegistrosPortal = totalInfo ? parseInt(totalInfo, 10) : null;
                 logger.info(`🔍 Pesquisa executada com filtros expandidos (total registros: ${totalInfo || 'desconhecido'})`);
             }
             await page.screenshot({ path: path.join(DEBUG_DIR, 'finnet-filtros-expandidos.png'), fullPage: true });
@@ -692,10 +694,79 @@ async function sincronizarPagamentos(email, senha) {
             logger.info(`📊 ${pagamentos.tablesProcessed || 0} tabela(s) de pagamento encontrada(s)`);
         }
         logger.info(`✅ Página ${paginaAtual}: ${dadosPagamento.length} pagamentos extraídos`);
-        allDadosPagamento = allDadosPagamento.concat(dadosPagamento);
+
+        // Página vazia mas ainda esperamos mais registros (total do portal indica mais dados):
+        // pode ser carregamento lento em vez de fim real (mesma classe de bug já vista no
+        // scraper de NFS-e). Retenta 1x com espera maior antes de aceitar como vazia.
+        let dadosPaginaFinal = dadosPagamento;
+        if (dadosPaginaFinal.length === 0 && totalRegistrosPortal && allDadosPagamento.length < totalRegistrosPortal) {
+            logger.info('   ⚠️ Página veio vazia — aguardando mais e tentando novamente...');
+            await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {});
+            await humanDelay(2000, 3000);
+            const retry = await page.evaluate(() => {
+                const allRows = [];
+                const tables = document.querySelectorAll('table');
+                for (const table of tables) {
+                    const headers = table.querySelectorAll('th');
+                    const headerTexts = Array.from(headers).map(h => h.textContent.trim());
+                    if (!headerTexts.some(h => h.includes('Documento')) ||
+                        !headerTexts.some(h => h.includes('Pagamento') || h.includes('Valor'))) {
+                        continue;
+                    }
+                    const headerMap = {};
+                    headerTexts.forEach((txt, i) => {
+                        const t = txt.toLowerCase();
+                        if (t === 'pagador' || t.startsWith('pagador')) headerMap.pagador = i;
+                        else if (t === 'favorecido' || t.startsWith('favorecido')) headerMap.favorecido = i;
+                        else if (t.includes('lançamento') || t.includes('lancamento')) headerMap.lancamento = i;
+                        else if (t === 'documento' || t.startsWith('documento')) headerMap.documento = i;
+                        else if (t.includes('número bancário') || t.includes('numero bancario') || t.includes('nº bancário')) headerMap.numeroBancario = i;
+                        else if (t === 'vencimento' || t.startsWith('vencimento')) headerMap.vencimento = i;
+                        else if (t === 'pagamento' || t.startsWith('pagamento')) headerMap.pagamento = i;
+                        else if (t === 'valor' || t.startsWith('valor')) headerMap.valor = i;
+                        else if (t.includes('situação') || t.includes('situacao') || t === 'situação') headerMap.situacao = i;
+                    });
+                    const allTrs = table.querySelectorAll('tbody tr');
+                    const cellCounts = {};
+                    for (const tr of allTrs) {
+                        const count = tr.querySelectorAll('td').length;
+                        cellCounts[count] = (cellCounts[count] || 0) + 1;
+                    }
+                    const thCount = headerTexts.length;
+                    const dataTdCount = Object.entries(cellCounts)
+                        .filter(([c]) => parseInt(c) >= thCount)
+                        .sort((a, b) => b[1] - a[1])[0]?.[0];
+                    const tdOffset = dataTdCount ? parseInt(dataTdCount) - thCount : 0;
+                    for (const tr of allTrs) {
+                        const cells = tr.querySelectorAll('td');
+                        if (!dataTdCount || cells.length !== parseInt(dataTdCount)) continue;
+                        const get = (key) => {
+                            const idx = headerMap[key];
+                            if (idx === undefined) return '';
+                            const adjustedIdx = idx <= 1 ? idx : idx + tdOffset;
+                            return cells[adjustedIdx] ? cells[adjustedIdx].textContent.trim() : '';
+                        };
+                        const doc = get('documento');
+                        if (!doc || !/^\d+$/.test(doc.trim())) continue;
+                        allRows.push({
+                            pagador: get('pagador'), favorecido: get('favorecido'), lancamento: get('lancamento'),
+                            documento: doc.trim(), numeroBancario: get('numeroBancario'), vencimento: get('vencimento'),
+                            pagamento: get('pagamento'), valor: get('valor'), situacao: get('situacao')
+                        });
+                    }
+                }
+                return allRows;
+            });
+            if (retry.length > 0) {
+                logger.info(`   → ${retry.length} pagamentos após retry`);
+                dadosPaginaFinal = retry;
+            }
+        }
+
+        allDadosPagamento = allDadosPagamento.concat(dadosPaginaFinal);
 
         // Verificar se há próxima página
-        if (dadosPagamento.length === 0) break;
+        if (dadosPaginaFinal.length === 0) break;
 
         const temProximaPagina = await page.evaluate(() => {
             // Procurar botão/link de "próxima página" via CSS + texto
