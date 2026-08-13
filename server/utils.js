@@ -27,7 +27,10 @@ function extrairDadosDoPdfText(text, alvoEhTomador) {
     const nomes = [];
     let m;
     while ((m = nomeRazaoRegex.exec(text)) !== null) {
-        const nome = m[1].trim().replace(/\s+/g, ' ');
+        let nome = m[1].trim().replace(/\s+/g, ' ');
+        // Defensivo: layout em duas colunas às vezes deixa um label residual duplicado
+        // colado no valor (ex: "Razão Social: Cimed & Co. S.a."). Remove antes de aceitar.
+        nome = nome.replace(/^raz[ãa]o\s*social\s*:?\s*/i, '').trim();
         if (nome.length > 2) nomes.push({ nome, pos: m.index });
     }
 
