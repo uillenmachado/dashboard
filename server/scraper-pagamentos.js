@@ -191,6 +191,52 @@ async function humanType(page, selector, text) {
 }
 
 /**
+ * Esconde o toast/aviso residual (`#msgAttention`) que o portal deixa sobreposto
+ * apos buscas, bloqueando cliques em pontos aparentemente aleatorios da tela
+ * (inclusive fora da area de filtros) por ate 45s.
+ */
+async function esconderMsgAttention(page) {
+    await page.evaluate(() => {
+        const el = document.getElementById('msgAttention');
+        if (el) { el.style.display = 'none'; el.innerHTML = ''; }
+    }).catch(() => {});
+}
+
+/**
+ * Clica em um ponto do body de forma resiliente (usado para fechar datepickers
+ * abertos). Some com o #msgAttention antes e usa forca como fallback.
+ */
+async function clicarForaDoCampo(page) {
+    await esconderMsgAttention(page);
+    try {
+        await page.click('body', { position: { x: 10, y: 10 }, timeout: 5000 });
+    } catch (e) {
+        await page.click('body', { position: { x: 10, y: 10 }, force: true, timeout: 5000 }).catch(() => {});
+    }
+}
+
+/**
+ * Clica em "Pesquisar" de forma resiliente. O portal às vezes deixa um
+ * toast/aviso residual (`#msgAttention`) sobreposto ao botão, que intercepta
+ * o clique e trava por até 45s (timeout padrão do Playwright). Esconde o
+ * aviso antes de clicar e usa clique forçado como fallback.
+ */
+async function clicarPesquisar(page) {
+    const btn = await page.$('input[value="Pesquisar"], button:has-text("Pesquisar")');
+    if (!btn) return false;
+
+    await esconderMsgAttention(page);
+
+    try {
+        await btn.click({ timeout: 8000 });
+    } catch (e) {
+        logger.debug(`⚠️ Clique normal em Pesquisar falhou (${e.message.split('\n')[0]}) — tentando clique forçado...`);
+        await btn.click({ force: true, timeout: 8000 }).catch(() => {});
+    }
+    return true;
+}
+
+/**
  * Sincroniza pagamentos via scraping direto do portal.
  * Usa playwright-extra + stealth plugin para contornar WAF.
  * headless: false obrigatório (modo headed evita detecção).
@@ -335,18 +381,37 @@ async function sincronizarPagamentos(email, senha) {
 
         await page.screenshot({ path: path.join(DEBUG_DIR, 'finnet-pagamentos.png'), fullPage: true });
 
-        // ── STEP 4: Ajustar filtros de data para capturar o máximo de dados ──
-        // O portal filtra por padrão os últimos 3 meses. Vamos expandir para capturar tudo.
-        logger.info('📅 Ajustando filtros de data para período máximo...');
-        let totalRegistrosPortal = null;
-
-        // Calcular datas: início = piso fixo (cobre todo o histórico da AVANT), fim = hoje.
-        // ATENÇÃO: já foi "hoje - 365 dias" — isso excluía silenciosamente qualquer
-        // pagamento anterior a 1 ano atrás, causando discrepância entre o portal
-        // (que mostra todo o histórico) e o que o sync realmente reconciliava.
+        // ── Janelas de busca: o portal parece limitar/ignorar buscas com período
+        // maior que 365 dias (confirmado: aplicar um range de anos deixava o filtro
+        // sem efeito real — "total registros" continuava idêntico ao da janela de
+        // 1 ano anterior). Por isso percorremos o histórico em janelas de até 365 dias.
         const hoje = new Date();
-        const dataFim = `${String(hoje.getDate()).padStart(2,'0')}/${String(hoje.getMonth()+1).padStart(2,'0')}/${hoje.getFullYear()}`;
-        const dataInicio = '01/01/2020';
+        const pisoHistorico = new Date(2020, 0, 1); // cobre toda a base de notas (mais antiga: 2023-03)
+        const formatarData = (d) => `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`;
+        const janelas = [];
+        {
+            let cursor = new Date(pisoHistorico);
+            while (cursor <= hoje) {
+                const fimJanela = new Date(cursor);
+                fimJanela.setDate(fimJanela.getDate() + 364); // 365 dias inclusive
+                if (fimJanela > hoje) fimJanela.setTime(hoje.getTime());
+                janelas.push({ inicio: new Date(cursor), fim: new Date(fimJanela) });
+                cursor = new Date(fimJanela);
+                cursor.setDate(cursor.getDate() + 1);
+            }
+        }
+        logger.info(`📅 Percorrendo histórico em ${janelas.length} janela(s) de até 365 dias (${formatarData(pisoHistorico)} a ${formatarData(hoje)})`);
+
+        let allDadosPagamento = [];
+
+        for (let janelaIdx = 0; janelaIdx < janelas.length; janelaIdx++) {
+        const dataInicio = formatarData(janelas[janelaIdx].inicio);
+        const dataFim = formatarData(janelas[janelaIdx].fim);
+        logger.info(`📅 Janela ${janelaIdx + 1}/${janelas.length}: ${dataInicio} a ${dataFim}`);
+        await esconderMsgAttention(page);
+
+        // ── STEP 4: Ajustar filtros de data para esta janela ──
+        let totalRegistrosPortal = null;
 
         // 4a) Expandir filtros se estiverem colapsados
         // Procurar botão/link de toggle dos filtros
@@ -452,6 +517,14 @@ async function sincronizarPagamentos(email, senha) {
 
                 if (iniVisible && fimVisible) {
                     // Forçar valor via DOM + evaluate (datepickers ignoram keyboard.type)
+                    // CUIDADO: o datepicker do portal valida "fim >= início" a cada mudança
+                    // de campo. Não dá pra assumir uma ordem fixa (ini-primeiro ou fim-primeiro)
+                    // porque o valor ANTIGO que ainda está no outro campo pode conflitar com o
+                    // NOVO valor em qualquer direção (janela nova pode ser inteira antes OU
+                    // inteira depois da janela anterior). Solução universal: 1) joga o início
+                    // para uma data-sentinela bem antiga (nunca conflita com nenhum fim antigo),
+                    // 2) seta o fim novo (nunca conflita com a sentinela), 3) só então seta o
+                    // início real (nunca conflita, pois início<=fim é garantido por construção).
                     await page.evaluate(({ iniSel, fimSel, dtIni, dtFim }) => {
                         function setDateInput(selector, value) {
                             const el = document.querySelector(selector);
@@ -469,8 +542,9 @@ async function sincronizarPagamentos(email, senha) {
                                 try { jQuery(el).trigger('change'); } catch(e) {}
                             }
                         }
-                        setDateInput(iniSel, dtIni);
+                        setDateInput(iniSel, '01/01/1900'); // sentinela: nunca conflita com nenhum fim
                         setDateInput(fimSel, dtFim);
+                        setDateInput(iniSel, dtIni);
                     }, { iniSel: inputIniSelector, fimSel: inputFimSelector, dtIni: dataInicio, dtFim: dataFim });
 
                     await humanDelay(500, 1000);
@@ -481,29 +555,39 @@ async function sincronizarPagamentos(email, senha) {
                     logger.debug(`📅 Valores após preenchimento: ini=${valIni}, fim=${valFim}`);
 
                     if (valIni !== dataInicio || valFim !== dataFim) {
-                        // Fallback: triple-click + type como último recurso
+                        // Fallback: triple-click + type como último recurso.
+                        // Mesma ordem (fim antes de início) pelo mesmo motivo de validação
+                        // "fim >= início" do datepicker do portal. Os campos costumam ser
+                        // readonly (widget de calendário) — .fill() pode nunca funcionar,
+                        // por isso cada passo tem timeout curto em vez do padrão de 45s.
                         logger.debug('📅 Valores não bateram, tentando via keyboard...');
-                        await inputIni.click({ clickCount: 3 });
-                        await humanDelay(200, 400);
-                        await page.keyboard.press('Backspace');
-                        await humanDelay(100, 200);
-                        await inputIni.fill(dataInicio);
-                        await humanDelay(400, 800);
-                        await page.click('body', { position: { x: 10, y: 10 } });
-                        await humanDelay(500, 800);
+                        try {
+                            await esconderMsgAttention(page);
+                            await inputFim.click({ clickCount: 3, timeout: 5000 }).catch(() => inputFim.click({ clickCount: 3, force: true, timeout: 5000 }));
+                            await humanDelay(200, 400);
+                            await page.keyboard.press('Backspace');
+                            await humanDelay(100, 200);
+                            await inputFim.fill(dataFim, { timeout: 5000 });
+                            await humanDelay(400, 800);
+                            await clicarForaDoCampo(page);
+                            await humanDelay(500, 800);
 
-                        await inputFim.click({ clickCount: 3 });
-                        await humanDelay(200, 400);
-                        await page.keyboard.press('Backspace');
-                        await humanDelay(100, 200);
-                        await inputFim.fill(dataFim);
-                        await humanDelay(500, 1000);
-                        await page.click('body', { position: { x: 10, y: 10 } });
-                        await humanDelay(300, 500);
+                            await esconderMsgAttention(page);
+                            await inputIni.click({ clickCount: 3, timeout: 5000 }).catch(() => inputIni.click({ clickCount: 3, force: true, timeout: 5000 }));
+                            await humanDelay(200, 400);
+                            await page.keyboard.press('Backspace');
+                            await humanDelay(100, 200);
+                            await inputIni.fill(dataInicio, { timeout: 5000 });
+                            await humanDelay(500, 1000);
+                            await clicarForaDoCampo(page);
+                            await humanDelay(300, 500);
 
-                        const valIni2 = await inputIni.inputValue();
-                        const valFim2 = await inputFim.inputValue();
-                        logger.debug(`📅 Valores após fallback keyboard: ini=${valIni2}, fim=${valFim2}`);
+                            const valIni2 = await inputIni.inputValue();
+                            const valFim2 = await inputFim.inputValue();
+                            logger.debug(`📅 Valores após fallback keyboard: ini=${valIni2}, fim=${valFim2}`);
+                        } catch (e) {
+                            logger.debug(`📅 Fallback via keyboard não funcionou (campo provavelmente readonly): ${e.message.split('\n')[0]}`);
+                        }
                     }
 
                     logger.info(`📅 Filtro preenchido: ${dataInicio} a ${dataFim}`);
@@ -513,10 +597,7 @@ async function sincronizarPagamentos(email, senha) {
         }
 
         if (filtrosAplicados) {
-            // Clicar em Pesquisar
-            const btnPesquisar = await page.$('input[value="Pesquisar"], button:has-text("Pesquisar")');
-            if (btnPesquisar) {
-                await btnPesquisar.click();
+            if (await clicarPesquisar(page)) {
                 await page.waitForLoadState('networkidle', { timeout: 30000 });
                 await humanDelay(2000, 4000);
 
@@ -578,9 +659,7 @@ async function sincronizarPagamentos(email, senha) {
             if (paginacaoAlterada) {
                 logger.info(`📄 Paginação alterada: ${paginacaoAlterada}`);
                 // Clicar em Pesquisar novamente para aplicar nova paginação
-                const btnPesquisar2 = await page.$('input[value="Pesquisar"], button:has-text("Pesquisar")');
-                if (btnPesquisar2) {
-                    await btnPesquisar2.click();
+                if (await clicarPesquisar(page)) {
                     await page.waitForLoadState('networkidle', { timeout: 30000 });
                     await humanDelay(2000, 4000);
                 }
@@ -594,8 +673,8 @@ async function sincronizarPagamentos(email, senha) {
         // ── STEP 6: Extrair dados da tabela (com suporte a múltiplas páginas) ──
         logger.info('📋 Extraindo dados de pagamentos...');
 
-        let allDadosPagamento = [];
         let paginaAtual = 1;
+        let assinaturaPaginaAnterior = null;
         const MAX_PAGINAS = 20; // Segurança: máximo de páginas
 
         while (paginaAtual <= MAX_PAGINAS) {
@@ -769,7 +848,19 @@ async function sincronizarPagamentos(email, senha) {
         // Verificar se há próxima página
         if (dadosPaginaFinal.length === 0) break;
 
-        const temProximaPagina = await page.evaluate(() => {
+        // Guarda contra navegação que não avançou de fato: se a página "nova" tem a
+        // MESMA assinatura (mesmos documentos) da página anterior, o clique/input de
+        // paginação não funcionou e estamos vendo os mesmos dados de novo — para aqui
+        // em vez de duplicar infinitamente.
+        const assinaturaAtual = dadosPaginaFinal.map(p => p.documento).join(',');
+        if (assinaturaPaginaAnterior !== null && assinaturaAtual === assinaturaPaginaAnterior) {
+            logger.info('⚠️ Página repetida (navegação não avançou) — encerrando paginação');
+            allDadosPagamento = allDadosPagamento.slice(0, allDadosPagamento.length - dadosPaginaFinal.length);
+            break;
+        }
+        assinaturaPaginaAnterior = assinaturaAtual;
+
+        let temProximaPagina = await page.evaluate(() => {
             // Procurar botão/link de "próxima página" via CSS + texto
             const nextBtns = [...document.querySelectorAll('a.next, a[rel="next"], li.next a, .pagination .next a, .paginate_button.next:not(.disabled) a')];
             // Busca por texto (não usar :has-text — não é CSS válido em evaluate)
@@ -795,6 +886,16 @@ async function sincronizarPagamentos(email, senha) {
             return false;
         });
 
+        // Fallback: se sabemos o total real de registros do portal e ainda não
+        // atingimos esse total, força tentativa de próxima página mesmo que a
+        // detecção de botão/paginação no DOM não tenha encontrado nada (evita
+        // parar cedo demais como aconteceu quando o total ficava desatualizado
+        // por causa do popup #msgAttention bloqueando a atualização da página).
+        if (!temProximaPagina && totalRegistrosPortal && allDadosPagamento.length < totalRegistrosPortal) {
+            logger.debug(`📄 DOM não indicou próxima página, mas ${allDadosPagamento.length}/${totalRegistrosPortal} — tentando mesmo assim`);
+            temProximaPagina = true;
+        }
+
         if (!temProximaPagina) {
             logger.info(`📄 Todas as páginas extraídas (${paginaAtual} página(s))`);
             break;
@@ -802,28 +903,32 @@ async function sincronizarPagamentos(email, senha) {
 
         // Navegar para próxima página
         logger.info(`📄 Navegando para página ${paginaAtual + 1}...`);
-        const navegou = await page.evaluate(() => {
-            const nextBtns = [...document.querySelectorAll('a.next, a[rel="next"], li.next a, .pagination .next a, .paginate_button.next:not(.disabled) a')];
-            document.querySelectorAll('a').forEach(a => {
-                const t = a.textContent.trim();
-                if (t === '>' || t === '>>' || t === '›' || /^pr[oó]xima$/i.test(t) || /^next$/i.test(t)) nextBtns.push(a);
+        // Sem botão/link de "próxima página" dedicado neste portal (grid custom sem
+        // paginador visível) — o único mecanismo é o input #current_page. Clicar em
+        // "Pesquisar" depois de alterá-lo NÃO funciona: reseta a busca para a página 1
+        // em vez de avançar (causava página 2 idêntica à página 1). O input precisa
+        // de uma interação real de teclado (Enter) para dispensar o handler correto.
+        const currentPageAntes = await page.evaluate(() => document.getElementById('current_page')?.value || null);
+        let navegou = false;
+        if (currentPageAntes !== null) {
+            const proximaPagina = String(parseInt(currentPageAntes, 10) + 1);
+            await page.fill('#current_page', proximaPagina);
+            await page.press('#current_page', 'Enter');
+            navegou = true;
+        } else {
+            // Fallback: procurar algum link/botão de navegação (ícones sem texto incluídos)
+            navegou = await page.evaluate(() => {
+                const candidatos = [...document.querySelectorAll('a, img, button')].filter(el => {
+                    const attrs = (el.getAttribute('title') || '') + ' ' + (el.getAttribute('alt') || '') + ' ' + (el.className || '');
+                    return /pr[oó]xim|next|avan[çc]ar/i.test(attrs);
+                });
+                for (const el of candidatos) {
+                    const clicavel = el.tagName === 'IMG' ? el.closest('a, button') : el;
+                    if (clicavel && clicavel.offsetParent !== null) { clicavel.click(); return true; }
+                }
+                return false;
             });
-            for (const btn of nextBtns) {
-                if (btn.offsetParent !== null) { btn.click(); return true; }
-            }
-            // Tentar incrementar current_page e submeter
-            const currentPageEl = document.getElementById('current_page');
-            if (currentPageEl) {
-                const current = parseInt(currentPageEl.value);
-                const nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
-                nativeSetter.call(currentPageEl, String(current + 1));
-                currentPageEl.dispatchEvent(new Event('change', {bubbles:true}));
-                // Clicar em pesquisar
-                const btn = document.querySelector('input[value="Pesquisar"], button[type="submit"]');
-                if (btn) { btn.click(); return true; }
-            }
-            return false;
-        });
+        }
 
         if (!navegou) {
             logger.info('📄 Não conseguiu navegar para próxima página');
@@ -835,7 +940,10 @@ async function sincronizarPagamentos(email, senha) {
         paginaAtual++;
         } // fim while paginação
 
-        logger.info(`✅ Total: ${allDadosPagamento.length} pagamentos extraídos de ${paginaAtual} página(s)`);
+        logger.info(`   → janela ${janelaIdx + 1}/${janelas.length}: ${allDadosPagamento.length} pagamentos acumulados até aqui`);
+        } // fim for janelas
+
+        logger.info(`✅ Total: ${allDadosPagamento.length} pagamentos extraídos de ${janelas.length} janela(s) de data`);
 
         const resultado = atualizarPagamentosNoBanco(allDadosPagamento);
 
