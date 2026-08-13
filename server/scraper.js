@@ -425,6 +425,7 @@ async function extrairNotas(page) {
         logger.info(`📊 Estimativa: ${totalPaginas} páginas (${regsPorPagina} por página)`);
 
         // Extrair páginas restantes usando submetePaginacao diretamente
+        let paginasVaziasConsecutivas = 0;
         for (let nextPage = 2; nextPage <= totalPaginas; nextPage++) {
             logger.info(`📄 Navegando para página ${nextPage}/${totalPaginas}...`);
 
@@ -453,15 +454,35 @@ async function extrairNotas(page) {
                 await page.waitForLoadState('load', { timeout: 20000 }).catch(() => {});
                 await page.waitForTimeout(1500);
 
-                const notasPagina = await extrairNotasDaTabela(page);
+                let notasPagina = await extrairNotasDaTabela(page);
+
+                // Página veio vazia mas ainda esperamos mais registros (total informado pelo
+                // portal indica mais páginas): pode ser carregamento lento, não fim real.
+                // Retenta 1x com espera maior antes de desistir dessa página.
+                if (notasPagina.length === 0 && totalRegistros && nextPage < totalPaginas) {
+                    logger.info('   ⚠️ Página veio vazia — aguardando mais e tentando novamente...');
+                    await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {});
+                    await page.waitForTimeout(3000);
+                    notasPagina = await extrairNotasDaTabela(page);
+                }
+
                 logger.info(`   → ${notasPagina.length} notas na página ${nextPage}`);
                 notas.push(...notasPagina);
 
-                // Se página veio vazia, pode ter acabado
                 if (notasPagina.length === 0) {
-                    logger.info('ℹ️ Página vazia — fim da paginação');
-                    break;
+                    paginasVaziasConsecutivas++;
+                    // Sem total conhecido, não há como diferenciar falha transitória de fim real —
+                    // mantém o comportamento antigo (mais seguro contra loop de 100 páginas).
+                    // Com total conhecido, tolera algumas páginas vazias seguidas antes de desistir,
+                    // pois já vimos falha de carregamento isolada perder ~480 notas de uma vez.
+                    const limiteVaziasConsecutivas = totalRegistros ? 3 : 1;
+                    if (paginasVaziasConsecutivas >= limiteVaziasConsecutivas) {
+                        logger.info('ℹ️ Página(s) vazia(s) — fim da paginação');
+                        break;
+                    }
+                    continue;
                 }
+                paginasVaziasConsecutivas = 0;
             } catch (e) {
                 logger.error(`⚠️ Erro na página ${nextPage}: ${e.message}`);
                 // Tentar continuar com a próxima página
