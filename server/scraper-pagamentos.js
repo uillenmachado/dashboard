@@ -965,8 +965,10 @@ function atualizarPagamentosNoBanco(pagamentos) {
             continue;
         }
 
-        // Marcar como pago
-        if (situacao === 'pago' || situacao === '') {
+        // Marcar como pago.
+        // O portal usa "Liquidada/Liquidado pelo Pagador" para antecipações — equivale a Pago.
+        const ehLiquidacaoAntecipada = situacao.includes('liquidad');
+        if (situacao === 'pago' || situacao === '' || ehLiquidacaoAntecipada) {
             db.marcarComoPaga(nota.id, {
                 data_pagamento: dataPgto,
                 forma_pagamento: pgto.lancamento || 'TED',
@@ -975,7 +977,8 @@ function atualizarPagamentosNoBanco(pagamentos) {
             });
 
             // Adicionar observação com informação do portal
-            const obs = `Pago via ${pgto.lancamento || 'TED'} - Finnet${pgto.numeroBancario ? ' (Nº ' + pgto.numeroBancario + ')' : ''}`;
+            const origemLabel = ehLiquidacaoAntecipada ? 'Liquidado pelo Pagador (Antecipação)' : (pgto.lancamento || 'TED');
+            const obs = `Pago via ${origemLabel} - Finnet${pgto.numeroBancario ? ' (Nº ' + pgto.numeroBancario + ')' : ''}`;
             db.atualizarNota(nota.id, { observacoes: obs });
 
             atualizados++;
