@@ -127,9 +127,16 @@ app.get('/health', (req, res) => {
         health.database = 'ok';
 
         // Última sincronização bem sucedida por tipo
-        const tipos = ['nfse', 'pagamentos'];
+        // Mapeia o rótulo exibido para os prefixos reais gravados em sincronizacoes.tipo
+        // ('painel_fornecedor_cimed' não contém a palavra "pagamentos" — sem esse mapa
+        // a seção "pagamentos" do healthcheck nunca era preenchida).
+        const tiposMap = {
+            nfse: ['nfse'],
+            pagamentos: ['pagamentos', 'painel_fornecedor', 'cimed']
+        };
+        const tipos = Object.keys(tiposMap);
         for (const tipo of tipos) {
-            const ultima = syncs.find(s => s.tipo && s.tipo.includes(tipo));
+            const ultima = syncs.find(s => s.tipo && tiposMap[tipo].some(k => s.tipo.includes(k)));
             if (ultima) {
                 health.sincronizacoes[tipo] = {
                     status: ultima.status,
@@ -142,7 +149,7 @@ app.get('/health', (req, res) => {
 
         // Marca degraded se as 2 últimas tentativas do mesmo tipo falharam
         for (const tipo of tipos) {
-            const recentes = syncs.filter(s => s.tipo && s.tipo.includes(tipo)).slice(0, 2);
+            const recentes = syncs.filter(s => s.tipo && tiposMap[tipo].some(k => s.tipo.includes(k))).slice(0, 2);
             if (recentes.length >= 2 && recentes.every(s => s.status === 'erro')) {
                 health.status = 'degraded';
                 health.sincronizacoes[tipo].alerta = `2+ falhas consecutivas de sync ${tipo}`;
