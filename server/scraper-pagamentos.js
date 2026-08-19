@@ -21,6 +21,7 @@ chromium.use(StealthPlugin());
 
 const PORTAL_URL = 'https://painelfornecedor.com.br/Cimed';
 const PORTAL_VISAO = 'https://painelfornecedor.com.br/Cimed?ctr=visaoFavorecido&mt=index';
+const PORTAL_ANTECIPACAO = 'https://painelfornecedor.com.br/Cimed?ctr=operacoesAntecipacao&mt=index';
 const DEBUG_DIR = path.join(__dirname, '..', 'data', 'debug');
 
 function ensureDebugDir() {
@@ -237,12 +238,347 @@ async function clicarPesquisar(page) {
 }
 
 /**
+ * Expande a seção de filtros (se colapsada) e localiza/preenche o par de
+ * inputs de data início/fim de UM filtro específico do portal para a janela
+ * desejada. Mesmo motor de grid usado tanto na tela de pagamentos ("Pagamento
+ * Inicial/Final") quanto na de antecipação ("Requisição Inicial/Final") —
+ * telas que podem ter MAIS de um par de datas visível simultaneamente
+ * (ex: Vencimento + Requisição), por isso a identificação por keyword/label
+ * é sempre tentada antes do fallback posicional.
+ * @param {string} keywordCampo - substring (lowercase) esperada no name/id do input (ex: 'pag', 'requis')
+ * @param {string} labelIni - texto esperado no label do TD anterior ao input de início (ex: 'Pagamento Inicial')
+ * @param {string} labelFim - idem para o input de fim
+ * @returns {Promise<boolean>} true se os campos foram localizados e preenchidos
+ */
+async function preencherFiltroDataJanela(page, dataInicio, dataFim, keywordCampo, labelIni, labelFim) {
+    // Expandir filtros se estiverem colapsados
+    const toggleFiltros = await page.$('a:has-text("Filtros"), a:has-text("filtros"), button:has-text("Filtros"), .toggle-filtros, [data-toggle="collapse"], a[href*="filtro"], a[onclick*="filtro"], .panel-heading a, .card-header a, a:has-text("Filtrar"), a:has-text("Exibir filtros")');
+    if (toggleFiltros) {
+        const isVisible = await toggleFiltros.isVisible();
+        if (isVisible) {
+            logger.debug('📅 Expandindo seção de filtros...');
+            await toggleFiltros.click();
+            await humanDelay(1000, 2000);
+        }
+    }
+
+    // Dump de TODOS os inputs para entender a estrutura do formulário
+    const allInputsDump = await page.evaluate(() => {
+        const inputs = [];
+        document.querySelectorAll('input').forEach(inp => {
+            const rect = inp.getBoundingClientRect();
+            const td = inp.closest('td');
+            let labelText = '';
+            if (td) {
+                const prevTd = td.previousElementSibling;
+                if (prevTd) labelText = prevTd.textContent.trim();
+            }
+            inputs.push({
+                id: inp.id,
+                name: inp.name,
+                type: inp.type,
+                value: inp.value,
+                visible: rect.width > 0 && rect.height > 0,
+                label: labelText,
+                placeholder: inp.placeholder
+            });
+        });
+        return inputs;
+    });
+
+    // Encontrar os campos de data entre os inputs VISÍVEIS (type text, valor DD/MM/YYYY)
+    const dateVisibleInputs = allInputsDump.filter(i =>
+        i.visible && i.type === 'text' && /^\d{2}\/\d{2}\/\d{4}$/.test(i.value)
+    );
+    logger.debug(`📅 [${keywordCampo}] Inputs visíveis com datas: ${JSON.stringify(dateVisibleInputs)}`);
+
+    let inputIniSelector = null;
+    let inputFimSelector = null;
+
+    // Estratégia 1: Identificar pelos nomes/ids (convenção do portal: data_pag_ini, data_pag_fim)
+    for (const inp of dateVisibleInputs) {
+        const identifier = (inp.id + ' ' + inp.name + ' ' + inp.label).toLowerCase();
+        if (identifier.includes(keywordCampo) && (identifier.includes('ini') || identifier.includes('inicial'))) {
+            inputIniSelector = inp.id ? `#${inp.id}` : `input[name="${inp.name}"]`;
+        }
+        if (identifier.includes(keywordCampo) && (identifier.includes('fim') || identifier.includes('final'))) {
+            inputFimSelector = inp.id ? `#${inp.id}` : `input[name="${inp.name}"]`;
+        }
+    }
+
+    // Estratégia 2: Se não achou por nome, usar label exato do TD anterior
+    if (!inputIniSelector || !inputFimSelector) {
+        for (const inp of dateVisibleInputs) {
+            if (inp.label.includes(labelIni) && !inputIniSelector) {
+                inputIniSelector = inp.id ? `#${inp.id}` : `input[name="${inp.name}"]`;
+            }
+            if (inp.label.includes(labelFim) && !inputFimSelector) {
+                inputFimSelector = inp.id ? `#${inp.id}` : `input[name="${inp.name}"]`;
+            }
+        }
+    }
+
+    // Estratégia 3 (último recurso): fallback posicional — só quando há
+    // EXATAMENTE 2 inputs de data visíveis (evita pegar o par errado em telas
+    // com múltiplos filtros de data, como Vencimento + Requisição)
+    if (!inputIniSelector && !inputFimSelector && dateVisibleInputs.length === 2) {
+        const first = dateVisibleInputs[0];
+        const second = dateVisibleInputs[1];
+        inputIniSelector = first.id ? `#${first.id}` : `input[name="${first.name}"]`;
+        inputFimSelector = second.id ? `#${second.id}` : `input[name="${second.name}"]`;
+        logger.debug(`📅 [${keywordCampo}] Usando fallback posicional: únicos 2 inputs de data visíveis`);
+    }
+
+    logger.debug(`📅 [${keywordCampo}] Seletores finais: ini=${inputIniSelector}, fim=${inputFimSelector}`);
+
+    if (!inputIniSelector || !inputFimSelector) return false;
+
+    const inputIni = await page.$(inputIniSelector);
+    const inputFim = await page.$(inputFimSelector);
+    if (!inputIni || !inputFim) return false;
+
+    const iniVisible = await inputIni.isVisible();
+    const fimVisible = await inputFim.isVisible();
+    if (!iniVisible || !fimVisible) return false;
+
+    // Forçar valor via DOM + evaluate (datepickers ignoram keyboard.type)
+    // CUIDADO: o datepicker do portal valida "fim >= início" a cada mudança
+    // de campo. Não dá pra assumir uma ordem fixa (ini-primeiro ou fim-primeiro)
+    // porque o valor ANTIGO que ainda está no outro campo pode conflitar com o
+    // NOVO valor em qualquer direção (janela nova pode ser inteira antes OU
+    // inteira depois da janela anterior). Solução universal: 1) joga o início
+    // para uma data-sentinela bem antiga (nunca conflita com nenhum fim antigo),
+    // 2) seta o fim novo (nunca conflita com a sentinela), 3) só então seta o
+    // início real (nunca conflita, pois início<=fim é garantido por construção).
+    await page.evaluate(({ iniSel, fimSel, dtIni, dtFim }) => {
+        function setDateInput(selector, value) {
+            const el = document.querySelector(selector);
+            if (!el) return;
+            // Setar via nativeInputValueSetter para contornar React/jQuery
+            const nativeSetter = Object.getOwnPropertyDescriptor(
+                window.HTMLInputElement.prototype, 'value'
+            ).set;
+            nativeSetter.call(el, value);
+            el.dispatchEvent(new Event('input', { bubbles: true }));
+            el.dispatchEvent(new Event('change', { bubbles: true }));
+            // Disparar eventos extras que datepickers jQuery escutam
+            el.dispatchEvent(new Event('blur', { bubbles: true }));
+            if (typeof jQuery !== 'undefined') {
+                try { jQuery(el).trigger('change'); } catch(e) {}
+            }
+        }
+        setDateInput(iniSel, '01/01/1900'); // sentinela: nunca conflita com nenhum fim
+        setDateInput(fimSel, dtFim);
+        setDateInput(iniSel, dtIni);
+    }, { iniSel: inputIniSelector, fimSel: inputFimSelector, dtIni: dataInicio, dtFim: dataFim });
+
+    await humanDelay(500, 1000);
+
+    // Verificar se os valores foram realmente aplicados
+    const valIni = await inputIni.inputValue();
+    const valFim = await inputFim.inputValue();
+    logger.debug(`📅 [${keywordCampo}] Valores após preenchimento: ini=${valIni}, fim=${valFim}`);
+
+    if (valIni !== dataInicio || valFim !== dataFim) {
+        // Fallback: triple-click + type como último recurso.
+        // Mesma ordem (fim antes de início) pelo mesmo motivo de validação
+        // "fim >= início" do datepicker do portal. Os campos costumam ser
+        // readonly (widget de calendário) — .fill() pode nunca funcionar,
+        // por isso cada passo tem timeout curto em vez do padrão de 45s.
+        logger.debug(`📅 [${keywordCampo}] Valores não bateram, tentando via keyboard...`);
+        try {
+            await esconderMsgAttention(page);
+            await inputFim.click({ clickCount: 3, timeout: 5000 }).catch(() => inputFim.click({ clickCount: 3, force: true, timeout: 5000 }));
+            await humanDelay(200, 400);
+            await page.keyboard.press('Backspace');
+            await humanDelay(100, 200);
+            await inputFim.fill(dataFim, { timeout: 5000 });
+            await humanDelay(400, 800);
+            await clicarForaDoCampo(page);
+            await humanDelay(500, 800);
+
+            await esconderMsgAttention(page);
+            await inputIni.click({ clickCount: 3, timeout: 5000 }).catch(() => inputIni.click({ clickCount: 3, force: true, timeout: 5000 }));
+            await humanDelay(200, 400);
+            await page.keyboard.press('Backspace');
+            await humanDelay(100, 200);
+            await inputIni.fill(dataInicio, { timeout: 5000 });
+            await humanDelay(500, 1000);
+            await clicarForaDoCampo(page);
+            await humanDelay(300, 500);
+        } catch (e) {
+            logger.debug(`📅 [${keywordCampo}] Fallback via keyboard não funcionou (campo provavelmente readonly): ${e.message.split('\n')[0]}`);
+        }
+    }
+
+    logger.info(`📅 [${keywordCampo}] Filtro preenchido: ${dataInicio} a ${dataFim}`);
+    return true;
+}
+
+/**
+ * O filtro "Status" da grid de antecipação abre por padrão em "Antecipação
+ * Agendada" (não "Todos") — sem selecionar "Todos" explicitamente, operações
+ * já concluídas ("Antecipação Realizada", que são as que interessam para
+ * conciliação) ficam de fora e a busca sempre retorna vazia.
+ * @returns {Promise<boolean>} true se encontrou e selecionou o filtro
+ */
+async function selecionarStatusTodos(page) {
+    return await page.evaluate(() => {
+        const selects = document.querySelectorAll('select');
+        for (const sel of selects) {
+            const opts = Array.from(sel.options);
+            const textos = opts.map(o => (o.textContent || '').trim());
+            const temTodos = textos.some(t => /^todos$/i.test(t));
+            const ehStatusAntecipacao = textos.some(t => /antecipa[çc][ãa]o/i.test(t));
+            if (temTodos && ehStatusAntecipacao) {
+                const optTodos = opts.find(o => /^todos$/i.test((o.textContent || '').trim()));
+                if (optTodos && sel.value !== optTodos.value) {
+                    sel.value = optTodos.value;
+                    sel.dispatchEvent(new Event('change', { bubbles: true }));
+                    return true;
+                }
+                return sel.value === optTodos.value;
+            }
+        }
+        return false;
+    });
+}
+
+/**
+ * Extrai os registros da grid "Operações de Antecipação" (ctr=operacoesAntecipacao),
+ * reaproveitando a sessão logada. Colunas relevantes: Nº NF, Número do Contrato,
+ * Valor da Nota. Mesma técnica de paginação via #current_page da tela de pagamentos
+ * (mesmo motor de grid do portal).
+ */
+async function extrairOperacoesAntecipacao(page) {
+    // IMPORTANTE: NÃO reutilizar aqui o "aumentar registros por página via <select>"
+    // usado na tela de pagamentos — nesta grid os selects de Status (values "10"-"15")
+    // e Banco Pagador (values "84","462"...) também têm opções numéricas >= 10 e o
+    // heurístico antigo confundia um deles com paginação, sobrescrevendo o filtro
+    // (ex: Status virava "Antecipação Agendada" mesmo com "Todos" selecionado) e
+    // zerando os resultados. A paginação via #current_page abaixo já é suficiente.
+
+    let allRows = [];
+    let paginaAtual = 1;
+    let assinaturaAnterior = null;
+    const MAX_PAGINAS = 20;
+
+    while (paginaAtual <= MAX_PAGINAS) {
+        const resultado = await page.evaluate(() => {
+            const rows = [];
+            const debugTabelas = [];
+            const tables = document.querySelectorAll('table');
+            for (const table of tables) {
+                const headers = table.querySelectorAll('th');
+                const headerTexts = Array.from(headers).map(h => h.textContent.trim());
+                if (!headerTexts.some(h => /n[ºo°]\s*nf/i.test(h)) || !headerTexts.some(h => /valor/i.test(h))) continue;
+
+                const headerMap = {};
+                headerTexts.forEach((txt, i) => {
+                    const t = txt.toLowerCase();
+                    if (/n[ºo°]\s*nf/.test(t)) headerMap.numeroNF = i;
+                    else if (t.includes('contrato')) headerMap.numeroContrato = i;
+                    else if (t === 'valor da nota' || t.startsWith('valor da nota')) headerMap.valorNota = i;
+                    else if (t === 'fornecedor' || t.startsWith('fornecedor')) headerMap.fornecedor = i;
+                });
+                if (headerMap.numeroNF === undefined) continue;
+
+                const thCount = headerTexts.length;
+                const allTrs = table.querySelectorAll('tbody tr');
+                const cellCounts = {};
+                for (const tr of allTrs) {
+                    const count = tr.querySelectorAll('td').length;
+                    cellCounts[count] = (cellCounts[count] || 0) + 1;
+                }
+                const dataTdCount = Object.entries(cellCounts)
+                    .filter(([c]) => parseInt(c) >= thCount)
+                    .sort((a, b) => b[1] - a[1])[0]?.[0];
+                const tdOffset = dataTdCount ? parseInt(dataTdCount) - thCount : 0;
+                debugTabelas.push({ headerTexts, headerMap, thCount, cellCounts, dataTdCount, tdOffset });
+
+                for (const tr of allTrs) {
+                    const cells = tr.querySelectorAll('td');
+                    if (!dataTdCount || cells.length !== parseInt(dataTdCount)) continue;
+                    const get = (key) => {
+                        const idx = headerMap[key];
+                        if (idx === undefined) return '';
+                        const adjustedIdx = idx <= 1 ? idx : idx + tdOffset;
+                        return cells[adjustedIdx] ? cells[adjustedIdx].textContent.trim() : '';
+                    };
+                    const numeroNF = get('numeroNF');
+                    if (!numeroNF || !/^\d+$/.test(numeroNF.trim())) continue;
+                    rows.push({
+                        numeroNF: numeroNF.trim(),
+                        numeroContrato: get('numeroContrato'),
+                        valorNota: get('valorNota'),
+                        fornecedor: get('fornecedor')
+                    });
+                }
+            }
+            return { rows, debugTabelas };
+        });
+
+        const dados = resultado.rows;
+        if (resultado.debugTabelas.length > 0) {
+            logger.debug(`💠 Antecipação — debug tabela: ${JSON.stringify(resultado.debugTabelas)}`);
+        }
+
+        if (dados.length === 0) break;
+
+        const assinaturaAtual = dados.map(d => d.numeroNF).join(',');
+        if (assinaturaAnterior !== null && assinaturaAtual === assinaturaAnterior) break;
+        assinaturaAnterior = assinaturaAtual;
+        allRows = allRows.concat(dados);
+
+        // Próxima página — mesma técnica do #current_page usada na tela de pagamentos
+        const currentPageAntes = await page.evaluate(() => document.getElementById('current_page')?.value || null);
+        if (currentPageAntes === null) break;
+        const proximaPagina = String(parseInt(currentPageAntes, 10) + 1);
+        await page.fill('#current_page', proximaPagina);
+        await page.press('#current_page', 'Enter');
+        await page.waitForLoadState('networkidle', { timeout: 30000 }).catch(() => {});
+        await humanDelay(1500, 3000);
+        paginaAtual++;
+    }
+
+    return allRows;
+}
+
+/**
+ * Corrige data_pagamento de notas já marcadas como pagas via antecipação em
+ * execuções anteriores que usavam datas erradas (versão antiga usava só
+ * data_emissao, sem os +30 dias). Idempotente — só atualiza quando a data
+ * guardada diverge do padrão atual (data_emissao + 30 dias).
+ */
+function corrigirDatasAntecipacoesExistentes() {
+    const notas = db.getDb().prepare(
+        "SELECT id, data_emissao, data_pagamento FROM notas_fiscais WHERE forma_pagamento = 'Antecipação (Factoring)' AND data_emissao IS NOT NULL AND data_emissao != ''"
+    ).all();
+
+    let corrigidos = 0;
+    for (const nota of notas) {
+        const emissaoMais30 = new Date(nota.data_emissao);
+        if (isNaN(emissaoMais30.getTime())) continue;
+        emissaoMais30.setDate(emissaoMais30.getDate() + 30);
+        const dataCorreta = emissaoMais30.toISOString().split('T')[0];
+        if (nota.data_pagamento !== dataCorreta) {
+            const diasPagamento = Math.floor((emissaoMais30 - new Date(nota.data_emissao)) / (1000 * 60 * 60 * 24));
+            db.atualizarNota(nota.id, { data_pagamento: dataCorreta, dias_pagamento: diasPagamento });
+            corrigidos++;
+        }
+    }
+    if (corrigidos > 0) logger.info(`🛠️ ${corrigidos} nota(s) com data de antecipação corrigida(s) para emissão+30 dias`);
+    return corrigidos;
+}
+
+/**
  * Sincroniza pagamentos via scraping direto do portal.
  * Usa playwright-extra + stealth plugin para contornar WAF.
  * headless: false obrigatório (modo headed evita detecção).
  */
-async function sincronizarPagamentos(email, senha) {
+async function sincronizarPagamentos(email, senha, opcoes = {}) {
     const syncId = db.registrarSincronizacao('painel_fornecedor_cimed');
+    corrigirDatasAntecipacoesExistentes();
     let browser = null;
 
     try {
@@ -385,8 +721,30 @@ async function sincronizarPagamentos(email, senha) {
         // maior que 365 dias (confirmado: aplicar um range de anos deixava o filtro
         // sem efeito real — "total registros" continuava idêntico ao da janela de
         // 1 ano anterior). Por isso percorremos o histórico em janelas de até 365 dias.
+        //
+        // Sync incremental: só a PRIMEIRA sincronização bem-sucedida varre desde 2020.
+        // Das próximas em diante, parte de 90 dias antes da última sync concluída —
+        // margem de segurança para pagamentos que o portal lança com atraso/retroativos —
+        // em vez de reprocessar anos inteiros já cobertos toda vez que o usuário clica em sincronizar.
         const hoje = new Date();
-        const pisoHistorico = new Date(2020, 0, 1); // cobre toda a base de notas (mais antiga: 2023-03)
+        const FLOOR_ABSOLUTO = new Date(2020, 0, 1); // cobre toda a base de notas (mais antiga: 2023-03)
+        let pisoHistorico = FLOOR_ABSOLUTO;
+        if (opcoes.forcarCompleto) {
+            logger.info('📅 Sync TOTAL forçado — ignorando incremental, varrendo histórico completo desde 2020');
+        } else {
+            const ultimaSyncOk = db.obterUltimaSincronizacaoConcluida('painel_fornecedor_cimed');
+            if (ultimaSyncOk) {
+                const dataUltimaSync = new Date(ultimaSyncOk.finalizado_at || ultimaSyncOk.created_at);
+                if (!isNaN(dataUltimaSync.getTime())) {
+                    const margemSeguranca = new Date(dataUltimaSync);
+                    margemSeguranca.setDate(margemSeguranca.getDate() - 90);
+                    if (margemSeguranca > FLOOR_ABSOLUTO) pisoHistorico = margemSeguranca;
+                    logger.info(`📅 Sync incremental: última sincronização concluída em ${dataUltimaSync.toLocaleDateString('pt-BR')} — reprocessando a partir de ${pisoHistorico.toLocaleDateString('pt-BR')}`);
+                }
+            } else {
+                logger.info('📅 Nenhuma sincronização anterior concluída — varrendo histórico completo desde 2020');
+            }
+        }
         const formatarData = (d) => `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`;
         const janelas = [];
         {
@@ -412,189 +770,7 @@ async function sincronizarPagamentos(email, senha) {
 
         // ── STEP 4: Ajustar filtros de data para esta janela ──
         let totalRegistrosPortal = null;
-
-        // 4a) Expandir filtros se estiverem colapsados
-        // Procurar botão/link de toggle dos filtros
-        const toggleFiltros = await page.$('a:has-text("Filtros"), a:has-text("filtros"), button:has-text("Filtros"), .toggle-filtros, [data-toggle="collapse"], a[href*="filtro"], a[onclick*="filtro"], .panel-heading a, .card-header a, a:has-text("Filtrar"), a:has-text("Exibir filtros")');
-        if (toggleFiltros) {
-            const isVisible = await toggleFiltros.isVisible();
-            if (isVisible) {
-                logger.debug('📅 Expandindo seção de filtros...');
-                await toggleFiltros.click();
-                await humanDelay(1000, 2000);
-            }
-        }
-
-        // 4b) Dump de TODOS os inputs para entender a estrutura do formulário
-        const allInputsDump = await page.evaluate(() => {
-            const inputs = [];
-            document.querySelectorAll('input').forEach(inp => {
-                const rect = inp.getBoundingClientRect();
-                const td = inp.closest('td');
-                let labelText = '';
-                if (td) {
-                    const prevTd = td.previousElementSibling;
-                    if (prevTd) labelText = prevTd.textContent.trim();
-                }
-                inputs.push({
-                    id: inp.id,
-                    name: inp.name,
-                    type: inp.type,
-                    value: inp.value,
-                    visible: rect.width > 0 && rect.height > 0,
-                    label: labelText,
-                    placeholder: inp.placeholder
-                });
-            });
-            return inputs;
-        });
-        logger.debug(`📅 Total de inputs na página: ${allInputsDump.length}`);
-        // Logar inputs visíveis com data ou nomes sugestivos
-        const inputsRelevantes = allInputsDump.filter(i => 
-            i.visible && i.type === 'text' && (
-                /^\d{2}\/\d{2}\/\d{4}$/.test(i.value) || 
-                /data|date|pag/i.test(i.name || '') ||
-                /data|date|pag/i.test(i.id || '')
-            )
-        );
-        logger.debug(`📅 Inputs relevantes (visíveis, tipo text, com data/nome sugestivo): ${JSON.stringify(inputsRelevantes)}`);
-
-        // 4c) Encontrar os campos de data de pagamento entre os inputs VISÍVEIS
-        // Estratégia: buscar inputs type="text" visíveis que contêm datas DD/MM/YYYY
-        const dateVisibleInputs = allInputsDump.filter(i => 
-            i.visible && i.type === 'text' && /^\d{2}\/\d{2}\/\d{4}$/.test(i.value)
-        );
-        logger.debug(`📅 Inputs visíveis com datas: ${JSON.stringify(dateVisibleInputs)}`);
-
-        let filtrosAplicados = false;
-        let inputIniSelector = null;
-        let inputFimSelector = null;
-
-        // Estratégia 1: Identificar pelos nomes (convenção do portal: data_pag_ini, data_pag_fim)
-        for (const inp of dateVisibleInputs) {
-            const identifier = (inp.id + ' ' + inp.name + ' ' + inp.label).toLowerCase();
-            if (identifier.includes('pag') && (identifier.includes('ini') || identifier.includes('inicial'))) {
-                inputIniSelector = inp.id ? `#${inp.id}` : `input[name="${inp.name}"]`;
-            }
-            if (identifier.includes('pag') && (identifier.includes('fim') || identifier.includes('final'))) {
-                inputFimSelector = inp.id ? `#${inp.id}` : `input[name="${inp.name}"]`;
-            }
-        }
-
-        // Estratégia 2: Se não achou por nome, usar label do TD anterior
-        if (!inputIniSelector || !inputFimSelector) {
-            for (const inp of dateVisibleInputs) {
-                if (inp.label.includes('Pagamento Inicial') && !inputIniSelector) {
-                    inputIniSelector = inp.id ? `#${inp.id}` : `input[name="${inp.name}"]`;
-                }
-                if (inp.label.includes('Pagamento Final') && !inputFimSelector) {
-                    inputFimSelector = inp.id ? `#${inp.id}` : `input[name="${inp.name}"]`;
-                }
-            }
-        }
-
-        // Estratégia 3: Se há exatamente 4 inputs de data visíveis, são:
-        // [Data Pag Inicial, Data Pag Final, Data Venc Inicial, Data Venc Final]
-        if (!inputIniSelector && !inputFimSelector && dateVisibleInputs.length >= 2) {
-            const first = dateVisibleInputs[0];
-            const second = dateVisibleInputs[1];
-            inputIniSelector = first.id ? `#${first.id}` : `input[name="${first.name}"]`;
-            inputFimSelector = second.id ? `#${second.id}` : `input[name="${second.name}"]`;
-            logger.debug('📅 Usando fallback posicional: primeiros 2 inputs de data visíveis');
-        }
-
-        logger.debug(`📅 Seletores finais: ini=${inputIniSelector}, fim=${inputFimSelector}`);
-
-        if (inputIniSelector && inputFimSelector) {
-            const inputIni = await page.$(inputIniSelector);
-            const inputFim = await page.$(inputFimSelector);
-
-            if (inputIni && inputFim) {
-                // Verificar que são visíveis antes de clicar
-                const iniVisible = await inputIni.isVisible();
-                const fimVisible = await inputFim.isVisible();
-                logger.debug(`📅 Visibilidade: ini=${iniVisible}, fim=${fimVisible}`);
-
-                if (iniVisible && fimVisible) {
-                    // Forçar valor via DOM + evaluate (datepickers ignoram keyboard.type)
-                    // CUIDADO: o datepicker do portal valida "fim >= início" a cada mudança
-                    // de campo. Não dá pra assumir uma ordem fixa (ini-primeiro ou fim-primeiro)
-                    // porque o valor ANTIGO que ainda está no outro campo pode conflitar com o
-                    // NOVO valor em qualquer direção (janela nova pode ser inteira antes OU
-                    // inteira depois da janela anterior). Solução universal: 1) joga o início
-                    // para uma data-sentinela bem antiga (nunca conflita com nenhum fim antigo),
-                    // 2) seta o fim novo (nunca conflita com a sentinela), 3) só então seta o
-                    // início real (nunca conflita, pois início<=fim é garantido por construção).
-                    await page.evaluate(({ iniSel, fimSel, dtIni, dtFim }) => {
-                        function setDateInput(selector, value) {
-                            const el = document.querySelector(selector);
-                            if (!el) return;
-                            // Setar via nativeInputValueSetter para contornar React/jQuery
-                            const nativeSetter = Object.getOwnPropertyDescriptor(
-                                window.HTMLInputElement.prototype, 'value'
-                            ).set;
-                            nativeSetter.call(el, value);
-                            el.dispatchEvent(new Event('input', { bubbles: true }));
-                            el.dispatchEvent(new Event('change', { bubbles: true }));
-                            // Disparar eventos extras que datepickers jQuery escutam
-                            el.dispatchEvent(new Event('blur', { bubbles: true }));
-                            if (typeof jQuery !== 'undefined') {
-                                try { jQuery(el).trigger('change'); } catch(e) {}
-                            }
-                        }
-                        setDateInput(iniSel, '01/01/1900'); // sentinela: nunca conflita com nenhum fim
-                        setDateInput(fimSel, dtFim);
-                        setDateInput(iniSel, dtIni);
-                    }, { iniSel: inputIniSelector, fimSel: inputFimSelector, dtIni: dataInicio, dtFim: dataFim });
-
-                    await humanDelay(500, 1000);
-
-                    // Verificar se os valores foram realmente aplicados
-                    const valIni = await inputIni.inputValue();
-                    const valFim = await inputFim.inputValue();
-                    logger.debug(`📅 Valores após preenchimento: ini=${valIni}, fim=${valFim}`);
-
-                    if (valIni !== dataInicio || valFim !== dataFim) {
-                        // Fallback: triple-click + type como último recurso.
-                        // Mesma ordem (fim antes de início) pelo mesmo motivo de validação
-                        // "fim >= início" do datepicker do portal. Os campos costumam ser
-                        // readonly (widget de calendário) — .fill() pode nunca funcionar,
-                        // por isso cada passo tem timeout curto em vez do padrão de 45s.
-                        logger.debug('📅 Valores não bateram, tentando via keyboard...');
-                        try {
-                            await esconderMsgAttention(page);
-                            await inputFim.click({ clickCount: 3, timeout: 5000 }).catch(() => inputFim.click({ clickCount: 3, force: true, timeout: 5000 }));
-                            await humanDelay(200, 400);
-                            await page.keyboard.press('Backspace');
-                            await humanDelay(100, 200);
-                            await inputFim.fill(dataFim, { timeout: 5000 });
-                            await humanDelay(400, 800);
-                            await clicarForaDoCampo(page);
-                            await humanDelay(500, 800);
-
-                            await esconderMsgAttention(page);
-                            await inputIni.click({ clickCount: 3, timeout: 5000 }).catch(() => inputIni.click({ clickCount: 3, force: true, timeout: 5000 }));
-                            await humanDelay(200, 400);
-                            await page.keyboard.press('Backspace');
-                            await humanDelay(100, 200);
-                            await inputIni.fill(dataInicio, { timeout: 5000 });
-                            await humanDelay(500, 1000);
-                            await clicarForaDoCampo(page);
-                            await humanDelay(300, 500);
-
-                            const valIni2 = await inputIni.inputValue();
-                            const valFim2 = await inputFim.inputValue();
-                            logger.debug(`📅 Valores após fallback keyboard: ini=${valIni2}, fim=${valFim2}`);
-                        } catch (e) {
-                            logger.debug(`📅 Fallback via keyboard não funcionou (campo provavelmente readonly): ${e.message.split('\n')[0]}`);
-                        }
-                    }
-
-                    logger.info(`📅 Filtro preenchido: ${dataInicio} a ${dataFim}`);
-                    filtrosAplicados = true;
-                }
-            }
-        }
+        const filtrosAplicados = await preencherFiltroDataJanela(page, dataInicio, dataFim, 'pag', 'Pagamento Inicial', 'Pagamento Final');
 
         if (filtrosAplicados) {
             if (await clicarPesquisar(page)) {
@@ -945,6 +1121,87 @@ async function sincronizarPagamentos(email, senha) {
 
         logger.info(`✅ Total: ${allDadosPagamento.length} pagamentos extraídos de ${janelas.length} janela(s) de data`);
 
+        // ── STEP 7: Operações de Antecipação — outra página do portal, mesma sessão logada ──
+        // Notas pagas via antecipação (factoring) não aparecem na visão de pagamentos comum,
+        // só nesta grid separada. Aparecer aqui já significa que a operação foi realizada.
+        // Mesmas janelas de 365 dias da visão de pagamentos (o filtro "Data Requisição"
+        // dessa grid só mostra ~3 meses por padrão — sem varrer por janela, antecipações
+        // antigas ficam de fora e nunca são conciliadas).
+        let allOperacoesAntecipacao = [];
+        try {
+            logger.info('💠 Navegando para Operações de Antecipação...');
+            await humanDelay(1000, 2000);
+            // networkidle pode nunca disparar se o portal mantiver polling em background —
+            // tenta domcontentloaded primeiro (rápido e confiável) e só espera idle depois,
+            // sem derrubar a etapa inteira se o idle demorar.
+            await page.goto(PORTAL_ANTECIPACAO, { waitUntil: 'domcontentloaded', timeout: 45000 });
+            await page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {});
+            await humanDelay(2000, 4000);
+
+            const bodyTextAntecipacao = await page.evaluate(() => document.body.innerText);
+            if (bodyTextAntecipacao.includes('bloqueada') || bodyTextAntecipacao.includes('blocked')) {
+                logger.info('⚠️ Portal bloqueou acesso a Operações de Antecipação — etapa ignorada, pagamentos normais não são afetados');
+            } else {
+                for (let janelaIdx = 0; janelaIdx < janelas.length; janelaIdx++) {
+                    const dataInicioJanela = formatarData(janelas[janelaIdx].inicio);
+                    const dataFimJanela = formatarData(janelas[janelaIdx].fim);
+                    logger.info(`💠 Antecipação — janela ${janelaIdx + 1}/${janelas.length}: ${dataInicioJanela} a ${dataFimJanela}`);
+                    await esconderMsgAttention(page);
+
+                    // Filtro "Status" abre em "Antecipação Agendada" por padrão — sem
+                    // forçar "Todos", as antecipações já concluídas (Realizada) ficam de
+                    // fora e a busca sempre volta vazia.
+                    await selecionarStatusTodos(page);
+
+                    const filtroOk = await preencherFiltroDataJanela(page, dataInicioJanela, dataFimJanela, 'requis', 'Requisição Inicial', 'Requisição Final');
+                    if (filtroOk) {
+                        if (await clicarPesquisar(page)) {
+                            await page.waitForLoadState('networkidle', { timeout: 30000 });
+                            await humanDelay(2000, 4000);
+                        }
+                    } else {
+                        logger.info('💠 Campos de Data Requisição não encontrados nesta janela — usando filtro padrão do portal');
+                    }
+
+                    const dadosJanela = await extrairOperacoesAntecipacao(page);
+                    logger.info(`   → ${dadosJanela.length} operações de antecipação nesta janela`);
+                    allOperacoesAntecipacao = allOperacoesAntecipacao.concat(dadosJanela);
+                }
+                ensureDebugDir();
+                await page.screenshot({ path: path.join(DEBUG_DIR, 'finnet-antecipacao.png'), fullPage: true });
+
+                // Deduplicar — a margem de 90 dias do sync incremental pode fazer a
+                // mesma operação aparecer em janelas adjacentes
+                const vistos = new Set();
+                allOperacoesAntecipacao = allOperacoesAntecipacao.filter(op => {
+                    const chave = `${op.numeroNF}_${op.numeroContrato}`;
+                    if (vistos.has(chave)) return false;
+                    vistos.add(chave);
+                    return true;
+                });
+            }
+        } catch (e) {
+            logger.info(`⚠️ Falha ao extrair Operações de Antecipação (${e.message.split('\n')[0]}) — pagamentos normais não são afetados`);
+        }
+        logger.info(`✅ ${allOperacoesAntecipacao.length} operações de antecipação extraídas`);
+
+        // Antecipação é só mais uma forma de pagamento — entra na MESMA fila de
+        // conciliação dos pagamentos normais, sem status/cor separados. Não há data
+        // de liquidação nessa grid do portal, então fica em branco e o fallback de
+        // atualizarPagamentosNoBanco usa emissão+30 dias da nota.
+        const pagamentosViaAntecipacao = allOperacoesAntecipacao.map(op => ({
+            pagador: '',
+            favorecido: op.fornecedor || '',
+            lancamento: 'Antecipação (Factoring)',
+            documento: op.numeroNF,
+            numeroBancario: op.numeroContrato || '',
+            vencimento: '',
+            pagamento: '',
+            valor: op.valorNota,
+            situacao: ''
+        }));
+        allDadosPagamento = allDadosPagamento.concat(pagamentosViaAntecipacao);
+
         const resultado = atualizarPagamentosNoBanco(allDadosPagamento);
 
         db.finalizarSincronizacao(syncId, {
@@ -1104,6 +1361,16 @@ function atualizarPagamentosNoBanco(pagamentos) {
             });
         }
 
+        // Nunca marcar como paga uma nota Cancelada (inclui canceladas e substituídas —
+        // o portal NFS-e reporta ambas como 'Cancelada') nem uma nota N/A (serviço
+        // contratado de terceiro) — evita duplicidade quando o fallback de matching
+        // (prefixo de ano/dígito extra/sufixo) acerta o número errado.
+        if (nota.recebido === 'Cancelada' || nota.recebido === 'N/A') {
+            logger.info(`⚠️ Doc ${numDoc} → nota ${nota.numero}: nota está '${nota.recebido}' — ignorado para evitar duplicidade`);
+            detalhes.push({ numero: numDoc, status: 'ignorado_cancelada_ou_nao_aplicavel', valor });
+            continue;
+        }
+
         // Se já está como Recebido, pular
         if (nota.recebido === 'Recebido') {
             jaRecebidos++;
@@ -1111,19 +1378,30 @@ function atualizarPagamentosNoBanco(pagamentos) {
             continue;
         }
 
+        // Sem data de pagamento do portal (caso das antecipações, que não têm essa
+        // coluna) — usa emissão + 30 dias como data_pagamento (padrão definido pelo usuário).
+        let dataPgtoEfetiva = dataPgto;
+        if (!dataPgtoEfetiva && nota.data_emissao) {
+            const emissaoMais30 = new Date(nota.data_emissao);
+            if (!isNaN(emissaoMais30.getTime())) {
+                emissaoMais30.setDate(emissaoMais30.getDate() + 30);
+                dataPgtoEfetiva = emissaoMais30.toISOString().split('T')[0];
+            }
+        }
+
         // Calcular dias para pagamento
         let diasPagamento = null;
-        if (dataPgto && nota.data_emissao) {
+        if (dataPgtoEfetiva && nota.data_emissao) {
             const emissao = new Date(nota.data_emissao);
-            const pagamento = new Date(dataPgto);
+            const pagamento = new Date(dataPgtoEfetiva);
             diasPagamento = Math.floor((pagamento - emissao) / (1000 * 60 * 60 * 24));
         }
 
         // Determinar status conciliado
         let statusConciliado = 'Pago';
-        if (dataVencimento && dataPgto) {
+        if (dataVencimento && dataPgtoEfetiva) {
             const venc = new Date(dataVencimento);
-            const pgtoDate = new Date(dataPgto);
+            const pgtoDate = new Date(dataPgtoEfetiva);
             if (pgtoDate > venc) {
                 statusConciliado = 'Pago com Atraso';
             } else if (pgtoDate < venc) {
@@ -1136,12 +1414,12 @@ function atualizarPagamentosNoBanco(pagamentos) {
         // Se situação do portal é "Agendado", marcar como previsão
         if (situacao === 'agendado') {
             db.atualizarNota(nota.id, {
-                previsao_recebimento: dataPgto || dataVencimento,
+                previsao_recebimento: dataPgtoEfetiva || dataVencimento,
                 status_conciliado: 'Agendado',
                 observacoes: `Pagamento agendado - Finnet (${pgto.lancamento || 'TED'})`
             });
             atualizados++;
-            detalhes.push({ numero: numDoc, status: 'agendado', valor, dataPrevista: dataPgto || dataVencimento });
+            detalhes.push({ numero: numDoc, status: 'agendado', valor, dataPrevista: dataPgtoEfetiva || dataVencimento });
             continue;
         }
 
@@ -1150,7 +1428,7 @@ function atualizarPagamentosNoBanco(pagamentos) {
         const ehLiquidacaoAntecipada = situacao.includes('liquidad');
         if (situacao === 'pago' || situacao === '' || ehLiquidacaoAntecipada) {
             db.marcarComoPaga(nota.id, {
-                data_pagamento: dataPgto,
+                data_pagamento: dataPgtoEfetiva,
                 forma_pagamento: pgto.lancamento || 'TED',
                 status_conciliado: statusConciliado,
                 dias_pagamento: diasPagamento
@@ -1162,7 +1440,7 @@ function atualizarPagamentosNoBanco(pagamentos) {
             db.atualizarNota(nota.id, { observacoes: obs });
 
             atualizados++;
-            detalhes.push({ numero: numDoc, status: 'atualizado', valor, dataPagamento: dataPgto, statusConciliado });
+            detalhes.push({ numero: numDoc, status: 'atualizado', valor, dataPagamento: dataPgtoEfetiva, statusConciliado });
         }
     }
 

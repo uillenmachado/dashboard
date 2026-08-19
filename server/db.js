@@ -450,6 +450,16 @@ function listarSincronizacoes(limite = 20) {
     return db.prepare('SELECT * FROM sincronizacoes ORDER BY created_at DESC LIMIT ?').all(limite);
 }
 
+/**
+ * Última sincronização concluída com sucesso de um tipo — usada para sync
+ * incremental (não reprocessar anos já cobertos em execuções anteriores).
+ */
+function obterUltimaSincronizacaoConcluida(tipo) {
+    return db.prepare(
+        "SELECT * FROM sincronizacoes WHERE tipo = ? AND status = 'concluido' ORDER BY created_at DESC LIMIT 1"
+    ).get(tipo);
+}
+
 // ==================== ANALYTICS AVANÇADO ====================
 
 /**
@@ -645,5 +655,6 @@ module.exports = {
     // Sincronizações
     registrarSincronizacao,
     finalizarSincronizacao,
-    listarSincronizacoes
+    listarSincronizacoes,
+    obterUltimaSincronizacaoConcluida
 };
